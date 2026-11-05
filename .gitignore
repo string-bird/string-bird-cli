@@ -1,0 +1,5 @@
+/sb
+/sb.exe
+/dist/
+*.test
+*.out

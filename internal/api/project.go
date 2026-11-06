@@ -3,7 +3,6 @@ package api
 import (
 	"context"
 	"net/http"
-	"net/url"
 )
 
 // Project is the part of the project JSON the CLI uses.
@@ -23,8 +22,7 @@ func (c *Client) Projects(ctx context.Context) ([]Project, error) {
 	var out struct {
 		Projects []Project `json:"projects"`
 	}
-	path := c.baseURL + "/v1/orgs/" + url.PathEscape(c.orgID) + "/projects"
-	if err := c.doJSON(ctx, http.MethodGet, path, nil, &out); err != nil {
+	if err := c.doJSON(ctx, http.MethodGet, c.orgPath("/projects", nil), nil, &out); err != nil {
 		return nil, err
 	}
 	return out.Projects, nil

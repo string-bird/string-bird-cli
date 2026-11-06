@@ -11,6 +11,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/string-bird/string-bird-cli/internal/api"
+	"github.com/string-bird/string-bird-cli/internal/config"
 )
 
 type pushOptions struct {
@@ -52,7 +53,7 @@ file exists, overwriting translations that differ unless --skip-existing.`,
 }
 
 func (a *app) push(ctx context.Context, opts pushOptions) error {
-	p, err := a.loadProject(ctx)
+	p, err := a.loadProject(ctx, config.All)
 	if err != nil {
 		return err
 	}

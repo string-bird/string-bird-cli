@@ -11,6 +11,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/string-bird/string-bird-cli/internal/api"
+	"github.com/string-bird/string-bird-cli/internal/config"
 )
 
 // pollInterval is how often release create --wait checks the release.
@@ -25,7 +26,7 @@ the CDN. An environment (production, staging, ...) points at one release;
 promoting points it at another, and pointing it at an older one rolls back.`,
 		Args: cobra.NoArgs,
 	}
-	cmd.AddCommand(a.releaseCreateCmd(), a.releasePromoteCmd())
+	cmd.AddCommand(a.releaseCreateCmd(), a.releasePromoteCmd(), a.releaseListCmd(), a.releaseDiffCmd())
 	return cmd
 }
 
@@ -57,7 +58,7 @@ func (a *app) releaseCreateCmd() *cobra.Command {
 }
 
 func (a *app) releaseCreate(ctx context.Context, opts releaseCreateOptions) error {
-	p, err := a.loadProject(ctx)
+	p, err := a.loadProject(ctx, config.Need{})
 	if err != nil {
 		return err
 	}
@@ -119,7 +120,7 @@ environment serves byte for byte what the release holds.`,
 }
 
 func (a *app) releasePromote(ctx context.Context, environment string, opts releasePromoteOptions) error {
-	p, err := a.loadProject(ctx)
+	p, err := a.loadProject(ctx, config.Need{})
 	if err != nil {
 		return err
 	}
@@ -157,10 +158,14 @@ func environmentRelease(ctx context.Context, c *api.Client, name string) (api.Re
 	return api.Release{}, fmt.Errorf("environment %s not found", name)
 }
 
-// findRelease takes a version (12 or v12) or a release id.
+// findRelease takes a version (12 or v12), a release id, or the name of an
+// environment, meaning the release it serves.
 func findRelease(ctx context.Context, c *api.Client, ref string) (api.Release, error) {
 	version, err := strconv.Atoi(strings.TrimPrefix(strings.ToLower(ref), "v"))
 	if err != nil {
+		if !uuidPattern.MatchString(ref) {
+			return environmentRelease(ctx, c, ref)
+		}
 		rel, err := c.Release(ctx, ref)
 		if err != nil {
 			return api.Release{}, fmt.Errorf("get release %s: %w", ref, err)

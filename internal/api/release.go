@@ -80,6 +80,73 @@ func (c *Client) ReleaseByVersion(ctx context.Context, version int) (Release, bo
 	return out.Releases[0], true, nil
 }
 
+// Releases lists releases newest first, up to limit.
+func (c *Client) Releases(ctx context.Context, limit int) ([]Release, error) {
+	q := url.Values{"limit": {strconv.Itoa(limit)}}
+	var out struct {
+		Releases []Release `json:"releases"`
+	}
+	if err := c.doJSON(ctx, http.MethodGet, c.projectPath("/releases", q), nil, &out); err != nil {
+		return nil, err
+	}
+	return out.Releases, nil
+}
+
+// Diff is what changed between two releases, by locale.
+type Diff struct {
+	From    *Release     `json:"from"`
+	To      Release      `json:"to"`
+	Locales []LocaleDiff `json:"locales"`
+}
+
+// LocaleDiff is one locale's changes; unchanged locales aren't listed.
+type LocaleDiff struct {
+	Locale  string        `json:"locale"`
+	Added   []DiffValue   `json:"added"`
+	Removed []DiffValue   `json:"removed"`
+	Changed []DiffChanged `json:"changed"`
+}
+
+// DiffValue is a key added or removed.
+type DiffValue struct {
+	Key   string `json:"key"`
+	Value string `json:"value"`
+}
+
+// DiffChanged is a key whose text changed.
+type DiffChanged struct {
+	Key      string `json:"key"`
+	OldValue string `json:"old_value"`
+	NewValue string `json:"new_value"`
+}
+
+// ReleaseDiff compares release id with against (empty: the release before it).
+func (c *Client) ReleaseDiff(ctx context.Context, id, against string) (Diff, error) {
+	q := url.Values{}
+	if against != "" {
+		q.Set("against", against)
+	}
+	var out Diff
+	if err := c.doJSON(ctx, http.MethodGet, c.projectPath("/releases/"+url.PathEscape(id)+"/diff", q), nil, &out); err != nil {
+		return Diff{}, err
+	}
+	return out, nil
+}
+
+// CreateEnvironment adds an environment with no release yet.
+func (c *Client) CreateEnvironment(ctx context.Context, name string) (Environment, error) {
+	in := struct {
+		Name string `json:"name"`
+	}{name}
+	var out struct {
+		Environment Environment `json:"environment"`
+	}
+	if err := c.doJSON(ctx, http.MethodPost, c.projectPath("/environments", nil), in, &out); err != nil {
+		return Environment{}, err
+	}
+	return out.Environment, nil
+}
+
 // Environments lists the project's environments by name.
 func (c *Client) Environments(ctx context.Context) ([]Environment, error) {
 	var out struct {

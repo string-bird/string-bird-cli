@@ -36,7 +36,7 @@ func TestReleaseCreate(t *testing.T) {
 			args:       []string{"release", "create", "--env", "staging", "--note", "Spring sale"},
 			wantBody:   `{"note":"Spring sale","environment":"staging"}`,
 			wantStdout: []string{"created v1", "staging → v1\n"},
-			wantEnvs:   map[string]string{"staging": "rel-1"},
+			wantEnvs:   map[string]string{"staging": relID(1)},
 		},
 		{
 			name:         "wait until published",
@@ -94,7 +94,7 @@ func TestReleaseCreate(t *testing.T) {
 			creates := p.requestsTo(http.MethodPost, "/releases")
 			require.Len(t, creates, 1)
 			assert.JSONEq(t, tt.wantBody, creates[0].body)
-			assert.Len(t, p.requestsTo(http.MethodGet, "/releases/rel-1"), tt.wantPolls)
+			assert.Len(t, p.requestsTo(http.MethodGet, "/releases/"+relID(1)), tt.wantPolls)
 			assert.Len(t, p.slept, tt.wantPolls)
 			assert.Equal(t, tt.wantEnvs, fake.envs)
 			for _, s := range tt.wantStdout {
@@ -121,28 +121,28 @@ func TestReleasePromote(t *testing.T) {
 			name:         "from another environment",
 			args:         []string{"release", "promote", "production", "--from", "staging"},
 			wantRequests: []string{"GET /environments", "PUT /environments/production"},
-			wantEnvs:     map[string]string{"production": "rel-3", "staging": "rel-3", "preview": ""},
+			wantEnvs:     map[string]string{"production": relID(3), "staging": relID(3), "preview": ""},
 			wantStdout:   "production → v3\n",
 		},
 		{
 			name:         "roll back by version",
 			args:         []string{"release", "promote", "production", "--release", "v1"},
 			wantRequests: []string{"GET /releases", "PUT /environments/production"},
-			wantEnvs:     map[string]string{"production": "rel-1", "staging": "rel-3", "preview": ""},
+			wantEnvs:     map[string]string{"production": relID(1), "staging": relID(3), "preview": ""},
 			wantStdout:   "production → v1\n",
 		},
 		{
 			name:         "by bare version",
 			args:         []string{"release", "promote", "staging", "--release", "2"},
 			wantRequests: []string{"GET /releases", "PUT /environments/staging"},
-			wantEnvs:     map[string]string{"production": "rel-2", "staging": "rel-2", "preview": ""},
+			wantEnvs:     map[string]string{"production": relID(2), "staging": relID(2), "preview": ""},
 			wantStdout:   "staging → v2\n",
 		},
 		{
 			name:         "by id",
-			args:         []string{"release", "promote", "production", "--release", "rel-3"},
-			wantRequests: []string{"GET /releases/rel-3", "PUT /environments/production"},
-			wantEnvs:     map[string]string{"production": "rel-3", "staging": "rel-3", "preview": ""},
+			args:         []string{"release", "promote", "production", "--release", relID(3)},
+			wantRequests: []string{"GET /releases/" + relID(3), "PUT /environments/production"},
+			wantEnvs:     map[string]string{"production": relID(3), "staging": relID(3), "preview": ""},
 			wantStdout:   "production → v3\n",
 		},
 		{
@@ -150,7 +150,7 @@ func TestReleasePromote(t *testing.T) {
 			args:         []string{"release", "promote", "production", "--release", "v9"},
 			wantCode:     1,
 			wantRequests: []string{"GET /releases"},
-			wantEnvs:     map[string]string{"production": "rel-2", "staging": "rel-3", "preview": ""},
+			wantEnvs:     map[string]string{"production": relID(2), "staging": relID(3), "preview": ""},
 			wantStderr:   "release v9 not found",
 		},
 		{
@@ -158,7 +158,7 @@ func TestReleasePromote(t *testing.T) {
 			args:         []string{"release", "promote", "production", "--from", "preview"},
 			wantCode:     1,
 			wantRequests: []string{"GET /environments"},
-			wantEnvs:     map[string]string{"production": "rel-2", "staging": "rel-3", "preview": ""},
+			wantEnvs:     map[string]string{"production": relID(2), "staging": relID(3), "preview": ""},
 			wantStderr:   "environment preview has no release yet",
 		},
 		{
@@ -166,14 +166,14 @@ func TestReleasePromote(t *testing.T) {
 			args:         []string{"release", "promote", "qa", "--from", "staging"},
 			wantCode:     1,
 			wantRequests: []string{"GET /environments", "PUT /environments/qa"},
-			wantEnvs:     map[string]string{"production": "rel-2", "staging": "rel-3", "preview": ""},
+			wantEnvs:     map[string]string{"production": relID(2), "staging": relID(3), "preview": ""},
 			wantStderr:   "promote qa: environment_not_found",
 		},
 		{
 			name:       "needs a release or a source",
 			args:       []string{"release", "promote", "production"},
 			wantCode:   1,
-			wantEnvs:   map[string]string{"production": "rel-2", "staging": "rel-3", "preview": ""},
+			wantEnvs:   map[string]string{"production": relID(2), "staging": relID(3), "preview": ""},
 			wantStderr: "at least one of the flags in the group [release from] is required",
 		},
 	}
@@ -183,7 +183,7 @@ func TestReleasePromote(t *testing.T) {
 			for range 3 {
 				fake.addRelease(api.ReleasePublished)
 			}
-			fake.envs = map[string]string{"production": "rel-2", "staging": "rel-3", "preview": ""}
+			fake.envs = map[string]string{"production": relID(2), "staging": relID(3), "preview": ""}
 			p := newTestProject(t, fake, "")
 
 			res := p.run(tt.args...)

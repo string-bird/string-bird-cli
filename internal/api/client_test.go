@@ -425,3 +425,53 @@ func TestErrorMessage(t *testing.T) {
 		(&Error{Status: 403, Code: "plan_limit_reached", Message: "Too many keys"}).Error())
 	assert.Equal(t, "http_502 (HTTP 502)", (&Error{Status: 502, Code: "http_502"}).Error())
 }
+
+func TestKeysPages(t *testing.T) {
+	rec := &recorder{responses: []response{
+		jsonResponse(200, `{"keys":[{"key":"a"},{"key":"b"}],"next_cursor":"c1"}`),
+		jsonResponse(200, `{"keys":[{"key":"c"}],"next_cursor":null}`),
+	}}
+	c, _ := newTestClient(t, rec)
+
+	keys, err := c.Keys(context.Background(), KeyFilter{Prefix: "x.", Locale: "de", Status: StatusMissing}, 0)
+
+	require.NoError(t, err)
+	assert.Len(t, keys, 3)
+	require.Len(t, rec.requests, 2)
+	assert.Equal(t, "limit=500&locale=de&prefix=x.&status=missing", rec.requests[0].URL.RawQuery)
+	assert.Equal(t, "cursor=c1&limit=500&locale=de&prefix=x.&status=missing", rec.requests[1].URL.RawQuery)
+}
+
+func TestKeysLimit(t *testing.T) {
+	rec := &recorder{responses: []response{jsonResponse(200, `{"keys":[{"key":"a"},{"key":"b"}],"next_cursor":"c1"}`)}}
+	c, _ := newTestClient(t, rec)
+
+	keys, err := c.Keys(context.Background(), KeyFilter{}, 2)
+
+	require.NoError(t, err)
+	assert.Len(t, keys, 2)
+	require.Len(t, rec.requests, 1)
+	assert.Equal(t, "limit=2", rec.requests[0].URL.RawQuery)
+}
+
+func TestRaw(t *testing.T) {
+	rec := &recorder{responses: []response{
+		{status: 429, headers: map[string]string{"Retry-After": "2"}, body: `{"error":{"code":"rate_limited"}}`},
+		jsonResponse(404, `{"error":{"code":"key_not_found"}}`),
+	}}
+	c, slept := newTestClient(t, rec)
+
+	resp, err := c.Raw(context.Background(), "DELETE", "/v1/orgs/o/projects/p/keys/k?x=1", []byte("b"), "text/plain")
+
+	require.NoError(t, err)
+	defer resp.Body.Close()
+	body, _ := io.ReadAll(resp.Body)
+	assert.Equal(t, 404, resp.StatusCode)
+	assert.JSONEq(t, `{"error":{"code":"key_not_found"}}`, string(body))
+	assert.Equal(t, []time.Duration{2 * time.Second}, *slept)
+	require.Len(t, rec.requests, 2)
+	assert.Equal(t, "/v1/orgs/o/projects/p/keys/k", rec.requests[1].URL.Path)
+	assert.Equal(t, "x=1", rec.requests[1].URL.RawQuery)
+	assert.Equal(t, "b", rec.bodies[1])
+	assert.Equal(t, "text/plain", rec.requests[1].Header.Get("Content-Type"))
+}

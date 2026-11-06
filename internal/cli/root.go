@@ -98,7 +98,8 @@ Project settings live in stringbird.yaml (sb init creates it); --org,
 	flags.StringVar(&a.project, "project", "", "project id or slug (default $"+envProjectID+", then project_id in the config)")
 	flags.StringVar(&a.files, "files", "", "translation files path with {locale}, relative to the working directory")
 
-	root.AddCommand(a.initCmd(), a.pushCmd(), a.pullCmd(), a.releaseCmd())
+	root.AddCommand(a.initCmd(), a.pushCmd(), a.pullCmd(), a.releaseCmd(), a.statusCmd(), a.translateCmd(),
+		a.approveCmd(), a.keysCmd(), a.localesCmd(), a.envCmd(), a.projectsCmd(), a.apiCmd())
 	return root
 }
 
@@ -118,8 +119,10 @@ func (p project) path(locale string) string {
 
 // loadProject reads stringbird.yaml, applies the flag and environment
 // overrides, and returns a client for the project, its slug resolved to an id.
-func (a *app) loadProject(ctx context.Context) (project, error) {
-	cfg, dir, err := a.loadConfig()
+// need says whether the command needs the files path too.
+func (a *app) loadProject(ctx context.Context, need config.Need) (project, error) {
+	need.Project = true
+	cfg, dir, err := a.loadConfig(need)
 	if err != nil {
 		return project{}, err
 	}
@@ -131,13 +134,25 @@ func (a *app) loadProject(ctx context.Context) (project, error) {
 	if err != nil {
 		return project{}, err
 	}
+	cfg.ProjectID = id
 	return project{cfg: cfg, client: client.ForProject(id), dir: dir}, nil
+}
+
+// loadOrg is loadProject for commands that work on the organization: only
+// org_id is needed.
+func (a *app) loadOrg() (config.Config, *api.Client, error) {
+	cfg, _, err := a.loadConfig(config.Need{})
+	if err != nil {
+		return config.Config{}, nil, err
+	}
+	client, err := a.newClient(cfg.OrgID)
+	return cfg, client, err
 }
 
 // loadConfig merges stringbird.yaml with --org, --project and --files and
 // their environment variables (flags first, then the environment, then the
-// file). The file is optional when the overrides cover every field.
-func (a *app) loadConfig() (config.Config, string, error) {
+// file). The file is optional when the overrides cover what need asks for.
+func (a *app) loadConfig(need config.Need) (config.Config, string, error) {
 	cfg, err := config.Load(a.configPath)
 	found := err == nil
 	if err != nil && !(errors.Is(err, fs.ErrNotExist) && a.configPath == config.DefaultPath) {
@@ -150,7 +165,7 @@ func (a *app) loadConfig() (config.Config, string, error) {
 		cfg.Files, dir = a.files, "."
 	}
 
-	err = cfg.Validate()
+	err = cfg.Validate(need)
 	var missing *config.MissingError
 	if errors.As(err, &missing) {
 		flags := map[string]string{

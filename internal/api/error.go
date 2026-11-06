@@ -3,7 +3,6 @@ package api
 import (
 	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
 	"strconv"
 	"strings"
@@ -35,9 +34,9 @@ func (e *Error) Error() string {
 	return fmt.Sprintf("%s: %s (HTTP %d)", e.Code, e.Message, e.Status)
 }
 
-func readError(resp *http.Response) *Error {
-	e := &Error{Status: resp.StatusCode, RetryAfter: retryAfter(resp.Header.Get("Retry-After"))}
-	data, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
+// parseError reads an error answer's body.
+func parseError(status int, header http.Header, data []byte) *Error {
+	e := &Error{Status: status, RetryAfter: retryAfter(header.Get("Retry-After"))}
 	var body struct {
 		Error struct {
 			Code     string    `json:"code"`
@@ -50,7 +49,7 @@ func readError(resp *http.Response) *Error {
 		return e
 	}
 	// Not our error shape: a proxy or load balancer answered.
-	e.Code = "http_" + strconv.Itoa(resp.StatusCode)
+	e.Code = "http_" + strconv.Itoa(status)
 	e.Message = strings.TrimSpace(string(data))
 	if r := []rune(e.Message); len(r) > 200 {
 		e.Message = string(r[:200]) + "…"

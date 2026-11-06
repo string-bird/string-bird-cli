@@ -50,7 +50,7 @@ func TestReleaseCreateWaitTimesOut(t *testing.T) {
 	require.Equal(t, 1, res.code)
 	assert.Contains(t, res.stdout, "created v1")
 	assert.Contains(t, res.stderr, "v1 still pending after 30s")
-	assert.Empty(t, p.requestsTo(http.MethodGet, "/releases/rel-1"))
+	assert.Empty(t, p.requestsTo(http.MethodGet, "/releases/"+relID(1)))
 }
 
 func TestReleaseCreateWaitAlreadyPublished(t *testing.T) {

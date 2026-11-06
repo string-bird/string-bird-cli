@@ -42,6 +42,16 @@ type fakeAPI struct {
 	publishAfter int
 	publishAs    string
 
+	// keys is the project's keys, by name; pageSize caps a key page.
+	keys     []api.Key
+	pageSize int
+	// job is the machine translation run POST /machine-translations starts;
+	// each GET moves it one step through jobSteps.
+	job      api.Job
+	jobSteps []api.Job
+	approved api.ApproveResult
+	diff     api.Diff
+
 	// fail answers a route ("POST /import") with an error.
 	fail map[string]fakeError
 	// rateLimited answers the first n requests with 429.
@@ -97,6 +107,13 @@ func (f *fakeAPI) handler() http.Handler {
 	route("GET /releases/{id}", f.getRelease)
 	route("GET /environments", f.listEnvironments)
 	route("PUT /environments/{name}", f.promote)
+	route("POST /environments", f.createEnvironment)
+	route("GET /keys", f.listKeys)
+	route("POST /locales", f.addLocale)
+	route("POST /machine-translations", f.startJob)
+	route("GET /machine-translations/{id}", f.getJob)
+	route("POST /translations/approve", f.approve)
+	route("GET /releases/{id}/diff", f.releaseDiff)
 	mux.HandleFunc("GET /v1/orgs/{org}/projects", func(w http.ResponseWriter, r *http.Request) {
 		f.serve(w, r, "GET /projects", f.listProjects)
 	})
@@ -139,6 +156,111 @@ func (f *fakeAPI) serve(w http.ResponseWriter, r *http.Request, route string, h 
 		}
 		h(w, r)
 	}
+}
+
+// listKeys filters like the API: prefix, and a status in one locale.
+func (f *fakeAPI) listKeys(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query()
+	locale, status := q.Get("locale"), q.Get("status")
+	if status != "" && locale == "" {
+		writeError(w, fakeError{status: http.StatusUnprocessableEntity, code: "invalid_filter"})
+		return
+	}
+	var match []api.Key
+	for _, k := range f.keys {
+		if !strings.HasPrefix(k.Key, q.Get("prefix")) {
+			continue
+		}
+		t, ok := k.Translations[locale]
+		switch status {
+		case api.StatusMissing:
+			if ok {
+				continue
+			}
+		case api.StatusOutdated:
+			if !ok || !t.Outdated {
+				continue
+			}
+		case api.StatusUnapproved:
+			if !ok || t.Approved {
+				continue
+			}
+		}
+		match = append(match, k)
+	}
+	start, _ := strconv.Atoi(q.Get("cursor"))
+	limit, _ := strconv.Atoi(q.Get("limit"))
+	if f.pageSize > 0 && limit > f.pageSize {
+		limit = f.pageSize
+	}
+	end := min(start+limit, len(match))
+	var next *string
+	if end < len(match) {
+		c := strconv.Itoa(end)
+		next = &c
+	}
+	page := match[start:end]
+	if page == nil {
+		page = []api.Key{}
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"keys": page, "next_cursor": next})
+}
+
+func (f *fakeAPI) addLocale(w http.ResponseWriter, r *http.Request) {
+	var in struct{ Locale string }
+	json.NewDecoder(r.Body).Decode(&in)
+	if len(in.Locale) < 2 {
+		writeError(w, fakeError{status: http.StatusUnprocessableEntity, code: "invalid_locale"})
+		return
+	}
+	code := in.Locale
+	if l, region, ok := strings.Cut(code, "-"); ok {
+		code = strings.ToLower(l) + "-" + strings.ToUpper(region)
+	}
+	if containsFold(f.project.Locales, code) {
+		writeError(w, fakeError{status: http.StatusConflict, code: "locale_exists"})
+		return
+	}
+	f.project.Locales = append(f.project.Locales, code)
+	writeJSON(w, http.StatusCreated, map[string]any{"locale": api.Locale{Code: code}})
+}
+
+func (f *fakeAPI) startJob(w http.ResponseWriter, _ *http.Request) {
+	writeJSON(w, http.StatusAccepted, map[string]any{"job": f.job})
+}
+
+func (f *fakeAPI) getJob(w http.ResponseWriter, r *http.Request) {
+	if r.PathValue("id") != f.job.ID {
+		writeError(w, fakeError{status: http.StatusNotFound, code: "mt_job_not_found"})
+		return
+	}
+	if len(f.jobSteps) > 0 {
+		f.job, f.jobSteps = f.jobSteps[0], f.jobSteps[1:]
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"job": f.job})
+}
+
+func (f *fakeAPI) approve(w http.ResponseWriter, _ *http.Request) {
+	writeJSON(w, http.StatusOK, f.approved)
+}
+
+func (f *fakeAPI) releaseDiff(w http.ResponseWriter, r *http.Request) {
+	if f.release(r.PathValue("id")) == nil {
+		writeError(w, fakeError{status: http.StatusNotFound, code: "release_not_found"})
+		return
+	}
+	writeJSON(w, http.StatusOK, f.diff)
+}
+
+func (f *fakeAPI) createEnvironment(w http.ResponseWriter, r *http.Request) {
+	var in struct{ Name string }
+	json.NewDecoder(r.Body).Decode(&in)
+	if _, ok := f.envs[in.Name]; ok {
+		writeError(w, fakeError{status: http.StatusConflict, code: "environment_exists"})
+		return
+	}
+	f.envs[in.Name] = ""
+	writeJSON(w, http.StatusCreated, map[string]any{"environment": api.Environment{ID: "env-" + in.Name, Name: in.Name}})
 }
 
 func (f *fakeAPI) listProjects(w http.ResponseWriter, _ *http.Request) {
@@ -279,7 +401,7 @@ func (f *fakeAPI) promote(w http.ResponseWriter, r *http.Request) {
 func (f *fakeAPI) addRelease(status string) *api.Release {
 	v := len(f.releases) + 1
 	f.releases = append(f.releases, api.Release{
-		ID: fmt.Sprintf("rel-%d", v), Version: v, Status: status, BundleFormat: "icu_flat",
+		ID: relID(v), Version: v, Status: status, BundleFormat: "icu_flat",
 		KeyCount: 120, Locales: []string{"de", "en"}, CreatedAt: time.Date(2026, 11, 5, 9, 0, 0, 0, time.UTC),
 	})
 	return &f.releases[v-1]
@@ -412,4 +534,9 @@ func (p *testProjectDir) requestsTo(method, path string) []fakeRequest {
 		}
 	}
 	return out
+}
+
+// relID is the fake's id of release version v.
+func relID(v int) string {
+	return fmt.Sprintf("01a1b100-0000-7000-8000-%012d", v)
 }

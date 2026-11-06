@@ -76,27 +76,41 @@ func Parse(data []byte) (Config, error) {
 	return cfg, nil
 }
 
-// Validate checks that the config can be used: every required field set and
-// a {locale} placeholder in Files. Missing fields are named by their YAML key.
-func (c Config) Validate() error {
+// Validate checks that the config can be used for what need says: those
+// fields set, and a {locale} placeholder in Files. Missing fields are named by
+// their YAML key.
+func (c Config) Validate(need Need) error {
 	var missing []string
-	for _, f := range []struct{ name, value string }{
-		{"org_id", c.OrgID},
-		{"project_id", c.ProjectID},
-		{"files", c.Files},
+	for _, f := range []struct {
+		name, value string
+		needed      bool
+	}{
+		{"org_id", c.OrgID, true},
+		{"project_id", c.ProjectID, need.Project},
+		{"files", c.Files, need.Files},
 	} {
-		if strings.TrimSpace(f.value) == "" {
+		if f.needed && strings.TrimSpace(f.value) == "" {
 			missing = append(missing, f.name)
 		}
 	}
 	if len(missing) > 0 {
 		return &MissingError{Fields: missing}
 	}
-	if !strings.Contains(c.Files, LocalePlaceholder) {
+	if need.Files && !strings.Contains(c.Files, LocalePlaceholder) {
 		return fmt.Errorf("files %q needs a %s placeholder", c.Files, LocalePlaceholder)
 	}
 	return nil
 }
+
+// Need is what a command needs from the config besides org_id, which every
+// command needs.
+type Need struct {
+	Project bool
+	Files   bool
+}
+
+// All is what push and pull need: every field.
+var All = Need{Project: true, Files: true}
 
 // MissingError names the required fields a config lacks.
 type MissingError struct {

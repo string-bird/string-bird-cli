@@ -7,6 +7,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
 	"strings"
@@ -83,10 +84,45 @@ func (c *Client) projectPath(path string, query url.Values) string {
 	return u
 }
 
+// orgPath is the URL of a route under the client's organization.
+func (c *Client) orgPath(path string, query url.Values) string {
+	u := c.baseURL + "/v1/orgs/" + url.PathEscape(c.orgID) + path
+	if len(query) > 0 {
+		u += "?" + query.Encode()
+	}
+	return u
+}
+
+// Raw sends any request to the API: path is the full route ("/v1/orgs/…"),
+// with its query. Unlike the typed methods it returns every response, error
+// statuses included, after retrying rate-limited ones. The caller closes the
+// body.
+func (c *Client) Raw(ctx context.Context, method, path string, body []byte, contentType string) (*http.Response, error) {
+	resp, err := c.send(ctx, method, c.baseURL+path, body, contentType)
+	if err != nil && resp == nil {
+		return nil, err
+	}
+	return resp, nil
+}
+
 // do sends a request, retrying when rate limited, and returns the response
 // when its status is 2xx or 304. Any other status is an *Error. The caller
 // closes the body.
 func (c *Client) do(ctx context.Context, method, url string, body []byte, contentType string) (*http.Response, error) {
+	resp, err := c.send(ctx, method, url, body, contentType)
+	if err != nil {
+		if resp != nil {
+			resp.Body.Close()
+		}
+		return nil, err
+	}
+	return resp, nil
+}
+
+// send sends a request, retrying when rate limited. A status other than 2xx
+// or 304 comes back as an *Error together with the response, its body
+// unread; a failed connection as an error alone.
+func (c *Client) send(ctx context.Context, method, url string, body []byte, contentType string) (*http.Response, error) {
 	for attempt := 0; ; attempt++ {
 		req, err := http.NewRequestWithContext(ctx, method, url, bytes.NewReader(body))
 		if err != nil {
@@ -107,13 +143,15 @@ func (c *Client) do(ctx context.Context, method, url string, body []byte, conten
 		if resp.StatusCode < 300 || resp.StatusCode == http.StatusNotModified {
 			return resp, nil
 		}
-		apiErr := readError(resp)
+		data, _ := io.ReadAll(io.LimitReader(resp.Body, 10<<20))
 		resp.Body.Close()
+		resp.Body = io.NopCloser(bytes.NewReader(data))
+		apiErr := parseError(resp.StatusCode, resp.Header, data)
 		if apiErr.Status != http.StatusTooManyRequests || attempt >= maxRetries {
-			return nil, apiErr
+			return resp, apiErr
 		}
 		if err := c.sleep(ctx, apiErr.RetryAfter); err != nil {
-			return nil, apiErr
+			return resp, apiErr
 		}
 	}
 }

@@ -10,6 +10,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/string-bird/string-bird-cli/internal/api"
+	"github.com/string-bird/string-bird-cli/internal/config"
 )
 
 type pullOptions struct {
@@ -42,7 +43,7 @@ Machine translations awaiting approval are left out unless --include-unapproved.
 }
 
 func (a *app) pull(ctx context.Context, opts pullOptions) error {
-	p, err := a.loadProject(ctx)
+	p, err := a.loadProject(ctx, config.All)
 	if err != nil {
 		return err
 	}

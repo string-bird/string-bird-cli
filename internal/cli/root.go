@@ -32,7 +32,6 @@ const (
 type app struct {
 	configPath string
 	apiKey     string
-	apiURL     string
 
 	version string
 	stdout  io.Writer
@@ -78,9 +77,6 @@ STRINGBIRD_API_KEY (or --api-key), never from the config file.`,
 	flags := root.PersistentFlags()
 	flags.StringVarP(&a.configPath, "config", "c", config.DefaultPath, "project config file")
 	flags.StringVar(&a.apiKey, "api-key", "", "API key (default $"+envAPIKey+")")
-	flags.StringVar(&a.apiURL, "api-url", "", "API URL (default $"+envAPIURL+", then "+defaultAPIURL+")")
-	// Hidden like STRINGBIRD_API_URL: users only ever talk to production.
-	_ = flags.MarkHidden("api-url")
 
 	root.AddCommand(a.pushCmd(), a.pullCmd(), a.releaseCmd())
 	return root
@@ -121,10 +117,10 @@ func (a *app) loadProject() (project, error) {
 	return project{cfg: cfg, client: client, dir: filepath.Dir(a.configPath)}, nil
 }
 
-// baseURL is the API to call: production unless --api-url or
-// STRINGBIRD_API_URL point elsewhere.
+// baseURL is the API to call: production unless STRINGBIRD_API_URL points
+// elsewhere.
 func (a *app) baseURL() string {
-	return firstSet(a.apiURL, a.getenv(envAPIURL), defaultAPIURL)
+	return firstSet(a.getenv(envAPIURL), defaultAPIURL)
 }
 
 func (a *app) wait(ctx context.Context, d time.Duration) error {

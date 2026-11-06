@@ -113,15 +113,18 @@ func TestAuthAndConnection(t *testing.T) {
 func TestAPIURL(t *testing.T) {
 	tests := []struct {
 		name string
-		// env and flag set STRINGBIRD_API_URL and --api-url; "fake" stands
-		// for the fake's URL.
-		env, flag  string
+		// env sets STRINGBIRD_API_URL; "fake" stands for the fake's URL.
+		env        string
+		args       []string
 		config     string
 		wantCode   int
 		wantStderr string
 	}{
 		{name: "environment", env: "fake"},
-		{name: "flag over environment", env: "http://127.0.0.1:1", flag: "fake"},
+		{
+			name: "no flag for it", env: "fake", args: []string{"--api-url", "http://127.0.0.1:1"},
+			wantCode: 1, wantStderr: "unknown flag: --api-url",
+		},
 		{
 			name: "unreachable", env: "http://127.0.0.1:1",
 			wantCode: 1, wantStderr: "get project: GET /v1/orgs/org-1/projects/proj-1",
@@ -143,12 +146,8 @@ func TestAPIURL(t *testing.T) {
 				return s
 			}
 			p.env[envAPIURL] = resolve(tt.env)
-			args := []string{"pull"}
-			if tt.flag != "" {
-				args = append(args, "--api-url", resolve(tt.flag))
-			}
 
-			res := p.run(args...)
+			res := p.run(append([]string{"pull"}, tt.args...)...)
 
 			require.Equal(t, tt.wantCode, res.code, "stderr: %s", res.stderr)
 			assert.Contains(t, res.stderr, tt.wantStderr)
@@ -160,17 +159,6 @@ func TestAPIURLDefaultsToProduction(t *testing.T) {
 	a := &app{getenv: func(string) string { return "" }}
 
 	assert.Equal(t, "https://api.stringbird.io", a.baseURL())
-}
-
-func TestHelpHidesAPIURL(t *testing.T) {
-	var out strings.Builder
-	a := &app{version: "test", stdout: &out, stderr: &out, getenv: func(string) string { return "" }}
-
-	code := a.run(context.Background(), []string{"pull", "--help"})
-
-	require.Equal(t, 0, code)
-	assert.Contains(t, out.String(), "--api-key")
-	assert.NotContains(t, out.String(), "api-url")
 }
 
 func TestVersion(t *testing.T) {

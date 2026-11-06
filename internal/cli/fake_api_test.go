@@ -302,6 +302,8 @@ type testProjectDir struct {
 	env map[string]string
 	// slept collects the waits sb asked for.
 	slept []time.Duration
+	// sleepErr is what every wait returns, e.g. a deadline.
+	sleepErr error
 }
 
 func newTestProject(t *testing.T, fake *fakeAPI, extraConfig string) *testProjectDir {
@@ -348,7 +350,7 @@ func (p *testProjectDir) run(args ...string) runResult {
 		getenv:  func(k string) string { return p.env[k] },
 		sleep: func(_ context.Context, d time.Duration) error {
 			p.slept = append(p.slept, d)
-			return nil
+			return p.sleepErr
 		},
 	}
 	args = append(args, "--config", filepath.Join(p.dir, "stringbird.yaml"))

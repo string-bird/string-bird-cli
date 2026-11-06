@@ -18,7 +18,7 @@ import (
 )
 
 // defaultAPIURL is the hosted String Bird API, the only one users talk to.
-const defaultAPIURL = "https://api.stringbird.com"
+const defaultAPIURL = "https://api.stringbird.io"
 
 // Environment variables the CLI reads.
 const (

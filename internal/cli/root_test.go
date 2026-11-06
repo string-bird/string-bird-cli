@@ -159,7 +159,7 @@ func TestAPIURL(t *testing.T) {
 func TestAPIURLDefaultsToProduction(t *testing.T) {
 	a := &app{getenv: func(string) string { return "" }}
 
-	assert.Equal(t, "https://api.stringbird.com", a.baseURL())
+	assert.Equal(t, "https://api.stringbird.io", a.baseURL())
 }
 
 func TestHelpHidesAPIURL(t *testing.T) {

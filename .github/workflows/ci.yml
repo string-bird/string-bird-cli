@@ -1,4 +1,4 @@
-name: ci
+name: CI
 
 on:
   push:
@@ -10,21 +10,25 @@ permissions:
 
 jobs:
   test:
+    name: Test (${{ matrix.os }})
     strategy:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v5
-      - uses: actions/setup-go@v6
+      - name: Check out
+        uses: actions/checkout@v5
+      - name: Set up Go
+        uses: actions/setup-go@v6
         with:
           go-version-file: go.mod
-      - name: gofmt
+      - name: Check formatting
         if: runner.os == 'Linux'
         run: test -z "$(gofmt -l .)" || { gofmt -l .; exit 1; }
-      - run: go vet ./...
-      - name: go test
+      - name: Vet
+        run: go vet ./...
+      - name: Run tests
         shell: bash
         run: |
           if [ "$RUNNER_OS" = Linux ]; then
@@ -36,20 +40,24 @@ jobs:
   # Builds every release archive, so a broken .goreleaser.yaml shows up here
   # rather than on a tag.
   snapshot:
+    name: Release build (snapshot)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
+      - name: Check out
+        uses: actions/checkout@v5
         with:
           fetch-depth: 0
-      - uses: actions/setup-go@v6
+      - name: Set up Go
+        uses: actions/setup-go@v6
         with:
           go-version-file: go.mod
-      - uses: goreleaser/goreleaser-action@v6
+      - name: Build release archives
+        uses: goreleaser/goreleaser-action@v6
         with:
           distribution: goreleaser
           version: "~> v2"
           args: release --snapshot --clean
-      - name: install.sh installs the snapshot
+      - name: Install with install.sh
         run: |
           version=$(jq -r .version dist/metadata.json)
           mkdir -p mirror/download/v$version
@@ -61,22 +69,27 @@ jobs:
 
   # The setup action, installing the latest release on each OS.
   action:
+    name: Setup action (${{ matrix.os }})
     strategy:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v5
-      - id: releases
+      - name: Check out
+        uses: actions/checkout@v5
+      - name: Look for a release
+        id: releases
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
         run: echo "count=$(gh release list --repo "$GITHUB_REPOSITORY" --limit 1 --json tagName --jq length)" >> "$GITHUB_OUTPUT"
-      - if: steps.releases.outputs.count != '0'
+      - name: Install sb with the action
+        if: steps.releases.outputs.count != '0'
         id: setup
         uses: ./
-      - if: steps.releases.outputs.count != '0'
+      - name: Run sb
+        if: steps.releases.outputs.count != '0'
         shell: bash
         run: |
           sb --version

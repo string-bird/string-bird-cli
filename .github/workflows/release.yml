@@ -1,4 +1,5 @@
-name: release
+name: Release
+run-name: Release ${{ github.ref_name }}
 
 on:
   push:
@@ -11,16 +12,21 @@ permissions:
 
 jobs:
   release:
+    name: Publish ${{ github.ref_name }}
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
+      - name: Check out
+        uses: actions/checkout@v5
         with:
           fetch-depth: 0 # changelog
-      - uses: actions/setup-go@v6
+      - name: Set up Go
+        uses: actions/setup-go@v6
         with:
           go-version-file: go.mod
-      - run: go test ./...
-      - uses: goreleaser/goreleaser-action@v6
+      - name: Run tests
+        run: go test ./...
+      - name: Build and publish the release
+        uses: goreleaser/goreleaser-action@v6
         with:
           distribution: goreleaser
           version: "~> v2"
@@ -31,11 +37,12 @@ jobs:
           SCOOP_BUCKET_TOKEN: ${{ secrets.SCOOP_BUCKET_TOKEN }}
       # `gh attestation verify sb_*.tar.gz --repo string-bird/string-bird-cli`
       # proves an archive was built here from the tagged commit.
-      - uses: actions/attest-build-provenance@v2
+      - name: Attest build provenance
+        uses: actions/attest-build-provenance@v2
         with:
           subject-checksums: dist/checksums.txt
       # `uses: string-bird/string-bird-cli@v0` follows the latest v0.x.y release.
-      - name: move the major tag
+      - name: Move the major version tag
         if: ${{ !contains(github.ref_name, '-') }}
         run: |
           major="${GITHUB_REF_NAME%%.*}"

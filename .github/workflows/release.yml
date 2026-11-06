@@ -1,0 +1,43 @@
+name: release
+
+on:
+  push:
+    tags: ["v*.*.*"] # not the moving major tag (v0) below
+
+permissions:
+  contents: write # create the GitHub release
+  id-token: write # sign build provenance
+  attestations: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0 # changelog
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+      - run: go test ./...
+      - uses: goreleaser/goreleaser-action@v6
+        with:
+          distribution: goreleaser
+          version: "~> v2"
+          args: release --clean
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+          SCOOP_BUCKET_TOKEN: ${{ secrets.SCOOP_BUCKET_TOKEN }}
+      # `gh attestation verify sb_*.tar.gz --repo string-bird/string-bird-cli`
+      # proves an archive was built here from the tagged commit.
+      - uses: actions/attest-build-provenance@v2
+        with:
+          subject-checksums: dist/checksums.txt
+      # `uses: string-bird/string-bird-cli@v0` follows the latest v0.x.y release.
+      - name: move the major tag
+        if: ${{ !contains(github.ref_name, '-') }}
+        run: |
+          major="${GITHUB_REF_NAME%%.*}"
+          git tag -f "$major" "$GITHUB_SHA"
+          git push -f origin "refs/tags/$major"

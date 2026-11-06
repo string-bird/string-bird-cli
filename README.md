@@ -16,13 +16,50 @@ sb release promote production --from staging
 
 ## Install
 
-With Go 1.26 or newer:
+Prebuilt binaries for Linux, macOS and Windows (amd64 and arm64) are on
+[GitHub releases](https://github.com/string-bird/string-bird-cli/releases).
+
+**macOS and Linux:**
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/string-bird/string-bird-cli/main/install.sh | sh
+```
+
+**Windows (PowerShell):**
+
+```powershell
+irm https://raw.githubusercontent.com/string-bird/string-bird-cli/main/install.ps1 | iex
+```
+
+Both scripts check the download against the release's `checksums.txt`. `SB_VERSION=v0.1.0`
+pins a version and `SB_INSTALL_DIR` picks the folder (default `/usr/local/bin` or
+`~/.local/bin`; on Windows `%LOCALAPPDATA%\Programs\sb`, added to your PATH).
+
+**Homebrew:**
+
+```bash
+brew install string-bird/tap/sb
+```
+
+**Scoop:**
+
+```powershell
+scoop bucket add string-bird https://github.com/string-bird/scoop-bucket
+scoop install string-bird/sb
+```
+
+**Go 1.26 or newer:**
 
 ```bash
 go install github.com/string-bird/string-bird-cli/cmd/sb@latest
 ```
 
-Prebuilt binaries will be attached to GitHub releases.
+Release archives come with build provenance, so you can check one was built by this
+repository's release workflow:
+
+```bash
+gh attestation verify sb_0.1.0_linux_amd64.tar.gz --repo string-bird/string-bird-cli
+```
 
 ## Configure
 
@@ -130,7 +167,11 @@ Pointing it at an older release rolls back.
 `sb` exits non-zero on any error and prints the API's error code (`invalid_import`,
 `plan_limit_reached`, …). Rate-limited requests are retried after the `Retry-After` wait.
 
-GitHub Actions, pushing source strings on `main` and releasing to staging:
+### GitHub Actions
+
+`string-bird/string-bird-cli` is also an action that installs `sb` and puts it on the PATH,
+on Linux, macOS and Windows runners. Pushing source strings on `main` and releasing to
+staging:
 
 ```yaml
 name: translations
@@ -143,17 +184,30 @@ jobs:
   push:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
-        with:
-          go-version: "1.26"
-      - run: go install github.com/string-bird/string-bird-cli/cmd/sb@latest
+      - uses: actions/checkout@v5
+      - uses: string-bird/string-bird-cli@v0 # or with: { version: v0.1.0 }
       - run: sb push
         env:
           STRINGBIRD_API_KEY: ${{ secrets.STRINGBIRD_API_KEY }}
       - run: sb release create --env staging --wait --note "${{ github.sha }}"
         env:
           STRINGBIRD_API_KEY: ${{ secrets.STRINGBIRD_API_KEY }}
+```
+
+| Input | |
+|---|---|
+| `version` | Release tag to install, e.g. `v0.1.0`. Default `latest`. |
+
+| Output | |
+|---|---|
+| `version` | The tag that was installed. |
+
+### Other CI
+
+Run the install script, then `sb` with `STRINGBIRD_API_KEY` set from your CI's secrets:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/string-bird/string-bird-cli/main/install.sh | SB_VERSION=v0.1.0 sh
 ```
 
 On pull requests, `sb push --dry-run` shows what merging would change without saving
@@ -168,7 +222,13 @@ go test ./...
 go build -o sb ./cmd/sb
 ```
 
-Tests run the commands against a hand-written fake of the API (`internal/cli/fake_api_test.go`).
+Tests run the commands against a hand-written fake of the API (`internal/cli/fake_api_test.go`);
+`cmd/sb` tests build the binary and run it.
+
+Releases: push a `v*` tag. The release workflow runs GoReleaser (`.goreleaser.yaml`), which
+builds the archives, publishes the GitHub release with checksums and provenance, and updates
+the Homebrew tap and Scoop bucket when `HOMEBREW_TAP_TOKEN` and `SCOOP_BUCKET_TOKEN` are set.
+Try it locally with `goreleaser release --snapshot --clean`.
 
 ## License
 

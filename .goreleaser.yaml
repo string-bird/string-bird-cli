@@ -1,0 +1,93 @@
+# Release builds: `git tag v0.1.0 && git push origin v0.1.0` runs
+# .github/workflows/release.yml, which runs GoReleaser with this config.
+# Local dry run: goreleaser release --snapshot --clean
+version: 2
+
+project_name: sb
+
+builds:
+  - id: sb
+    main: ./cmd/sb
+    binary: sb
+    env:
+      - CGO_ENABLED=0
+    goos: [linux, darwin, windows]
+    goarch: [amd64, arm64]
+    flags:
+      - -trimpath
+    ldflags:
+      - -s -w -X main.version={{ .Version }}
+    mod_timestamp: "{{ .CommitTimestamp }}"
+
+archives:
+  - id: sb
+    # sb_0.1.0_linux_amd64.tar.gz, sb_0.1.0_windows_arm64.zip; install.sh,
+    # install.ps1 and action.yml build these names.
+    name_template: "sb_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    formats: [tar.gz]
+    format_overrides:
+      - goos: windows
+        formats: [zip]
+    files:
+      - LICENSE
+      - README.md
+
+checksum:
+  name_template: checksums.txt
+
+changelog:
+  use: github
+  sort: asc
+  filters:
+    exclude:
+      - "^docs"
+      - "^test"
+      - "^ci"
+      - "^chore"
+
+release:
+  github:
+    owner: string-bird
+    name: string-bird-cli
+  prerelease: auto
+
+# brew install string-bird/tap/sb. Published only when HOMEBREW_TAP_TOKEN (a
+# token that can push to string-bird/homebrew-tap) is set.
+homebrew_casks:
+  - name: sb
+    binaries: [sb]
+    homepage: https://github.com/string-bird/string-bird-cli
+    description: "String Bird CLI: push and pull translation files, publish releases"
+    license: MIT
+    repository:
+      owner: string-bird
+      name: homebrew-tap
+      token: '{{ index .Env "HOMEBREW_TAP_TOKEN" }}'
+    skip_upload: '{{ if index .Env "HOMEBREW_TAP_TOKEN" }}false{{ else }}true{{ end }}'
+    commit_author:
+      name: string-bird-bot
+      email: bot@stringbird.io
+    hooks:
+      post:
+        # The binaries aren't notarized yet; without this macOS refuses to
+        # run them. Signing and notarizing would make it unnecessary.
+        install_steps: |
+          on_macos do
+            run "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "{{ .StagedPath }}/sb"]
+          end
+
+# scoop bucket add string-bird https://github.com/string-bird/scoop-bucket
+# scoop install string-bird/sb. Published only when SCOOP_BUCKET_TOKEN is set.
+scoops:
+  - name: sb
+    homepage: https://github.com/string-bird/string-bird-cli
+    description: String Bird CLI - push and pull translation files, publish releases
+    license: MIT
+    repository:
+      owner: string-bird
+      name: scoop-bucket
+      token: '{{ index .Env "SCOOP_BUCKET_TOKEN" }}'
+    skip_upload: '{{ if index .Env "SCOOP_BUCKET_TOKEN" }}false{{ else }}true{{ end }}'
+    commit_author:
+      name: string-bird-bot
+      email: bot@stringbird.io

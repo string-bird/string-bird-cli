@@ -1,0 +1,83 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+      - name: gofmt
+        if: runner.os == 'Linux'
+        run: test -z "$(gofmt -l .)" || { gofmt -l .; exit 1; }
+      - run: go vet ./...
+      - name: go test
+        shell: bash
+        run: |
+          if [ "$RUNNER_OS" = Linux ]; then
+            go test -race ./...
+          else
+            go test ./...
+          fi
+
+  # Builds every release archive, so a broken .goreleaser.yaml shows up here
+  # rather than on a tag.
+  snapshot:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+      - uses: goreleaser/goreleaser-action@v6
+        with:
+          distribution: goreleaser
+          version: "~> v2"
+          args: release --snapshot --clean
+      - name: install.sh installs the snapshot
+        run: |
+          version=$(jq -r .version dist/metadata.json)
+          mkdir -p mirror/download/v$version
+          cp dist/*.tar.gz dist/*.zip dist/checksums.txt mirror/download/v$version/
+          (cd mirror && python3 -m http.server 8765 >/dev/null 2>&1 &)
+          sleep 1
+          SB_VERSION=v$version SB_DOWNLOAD_BASE=http://127.0.0.1:8765 SB_INSTALL_DIR=$RUNNER_TEMP/bin sh install.sh
+          "$RUNNER_TEMP/bin/sb" --version | grep -F "$version"
+
+  # The setup action, installing the latest release on each OS.
+  action:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v5
+      - id: releases
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: echo "count=$(gh release list --repo "$GITHUB_REPOSITORY" --limit 1 --json tagName --jq length)" >> "$GITHUB_OUTPUT"
+      - if: steps.releases.outputs.count != '0'
+        id: setup
+        uses: ./
+      - if: steps.releases.outputs.count != '0'
+        shell: bash
+        run: |
+          sb --version
+          test -n "${{ steps.setup.outputs.version }}"

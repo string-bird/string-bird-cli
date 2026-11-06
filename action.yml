@@ -1,0 +1,30 @@
+name: Set up String Bird CLI
+description: Install sb, the String Bird CLI, and add it to PATH.
+author: String Bird
+branding:
+  icon: globe
+  color: blue
+
+inputs:
+  version:
+    description: Release tag to install, e.g. v0.1.0. Default is the latest release.
+    required: false
+    default: latest
+
+outputs:
+  version:
+    description: The release tag that was installed.
+    value: ${{ steps.install.outputs.version }}
+
+runs:
+  using: composite
+  steps:
+    - id: install
+      shell: bash
+      env:
+        SB_VERSION: ${{ inputs.version == 'latest' && '' || inputs.version }}
+        SB_INSTALL_DIR: ${{ runner.temp }}/sb-cli
+      run: |
+        sh "$GITHUB_ACTION_PATH/install.sh"
+        echo "$SB_INSTALL_DIR" >> "$GITHUB_PATH"
+        echo "version=$("$SB_INSTALL_DIR/sb" --version | awk '{ print "v" $3 }' | sed 's/^vv/v/')" >> "$GITHUB_OUTPUT"

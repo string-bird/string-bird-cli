@@ -98,6 +98,7 @@ func TestAuthAndConnection(t *testing.T) {
 			}
 			p := newTestProject(t, fake, tt.config)
 			p.env = tt.env
+			p.env[envAPIURL] = p.url
 
 			res := p.run(tt.args...)
 
@@ -112,35 +113,35 @@ func TestAuthAndConnection(t *testing.T) {
 func TestAPIURL(t *testing.T) {
 	tests := []struct {
 		name string
-		// url replaces the config's api_url ("" drops it); env and flag
-		// override it. "fake" stands for the fake's URL.
-		url, env, flag string
-		wantCode       int
-		wantStderr     string
+		// env and flag set STRINGBIRD_API_URL and --api-url; "fake" stands
+		// for the fake's URL.
+		env, flag  string
+		config     string
+		wantCode   int
+		wantStderr string
 	}{
-		{name: "from the config", url: "fake"},
-		{name: "environment over config", url: "http://127.0.0.1:1", env: "fake"},
-		{name: "flag over environment", url: "http://127.0.0.1:1", env: "http://127.0.0.1:1", flag: "fake"},
-		{name: "environment alone", env: "fake"},
-		{name: "none", wantCode: 1, wantStderr: "no API URL"},
-		{name: "unreachable", url: "http://127.0.0.1:1", wantCode: 1, wantStderr: "get project: GET /v1/orgs/org-1/projects/proj-1"},
+		{name: "environment", env: "fake"},
+		{name: "flag over environment", env: "http://127.0.0.1:1", flag: "fake"},
+		{
+			name: "unreachable", env: "http://127.0.0.1:1",
+			wantCode: 1, wantStderr: "get project: GET /v1/orgs/org-1/projects/proj-1",
+		},
+		{
+			name: "not configurable in the file", env: "fake", config: "api_url: http://127.0.0.1:1\n",
+			wantCode: 1, wantStderr: "field api_url not found",
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			fake := newFakeAPI()
 			fake.project.Locales = nil
-			p := newTestProject(t, fake, "")
+			p := newTestProject(t, fake, tt.config)
 			resolve := func(s string) string {
 				if s == "fake" {
 					return p.url
 				}
 				return s
 			}
-			config := "org_id: org-1\nproject_id: proj-1\nfiles: l/{locale}.json\n"
-			if tt.url != "" {
-				config += "api_url: " + resolve(tt.url) + "\n"
-			}
-			p.write("stringbird.yaml", config)
 			p.env[envAPIURL] = resolve(tt.env)
 			args := []string{"pull"}
 			if tt.flag != "" {
@@ -153,6 +154,23 @@ func TestAPIURL(t *testing.T) {
 			assert.Contains(t, res.stderr, tt.wantStderr)
 		})
 	}
+}
+
+func TestAPIURLDefaultsToProduction(t *testing.T) {
+	a := &app{getenv: func(string) string { return "" }}
+
+	assert.Equal(t, "https://api.stringbird.com", a.baseURL())
+}
+
+func TestHelpHidesAPIURL(t *testing.T) {
+	var out strings.Builder
+	a := &app{version: "test", stdout: &out, stderr: &out, getenv: func(string) string { return "" }}
+
+	code := a.run(context.Background(), []string{"pull", "--help"})
+
+	require.Equal(t, 0, code)
+	assert.Contains(t, out.String(), "--api-key")
+	assert.NotContains(t, out.String(), "api-url")
 }
 
 func TestVersion(t *testing.T) {

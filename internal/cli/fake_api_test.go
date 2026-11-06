@@ -310,10 +310,10 @@ func newTestProject(t *testing.T, fake *fakeAPI, extraConfig string) *testProjec
 	t.Cleanup(srv.Close)
 	p := &testProjectDir{
 		t: t, dir: t.TempDir(), api: fake, url: srv.URL,
-		env: map[string]string{envAPIKey: testKey},
+		env: map[string]string{envAPIKey: testKey, envAPIURL: srv.URL},
 	}
-	p.write("stringbird.yaml", fmt.Sprintf("api_url: %s\norg_id: %s\nproject_id: %s\nfiles: locales/{locale}.json\n%s",
-		srv.URL, testOrg, testProject, extraConfig))
+	p.write("stringbird.yaml", fmt.Sprintf("org_id: %s\nproject_id: %s\nfiles: locales/{locale}.json\n%s",
+		testOrg, testProject, extraConfig))
 	return p
 }
 

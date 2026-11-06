@@ -17,9 +17,14 @@ import (
 	"github.com/string-bird/string-bird-cli/internal/config"
 )
 
+// defaultAPIURL is the hosted String Bird API, the only one users talk to.
+const defaultAPIURL = "https://api.stringbird.com"
+
 // Environment variables the CLI reads.
 const (
 	envAPIKey = "STRINGBIRD_API_KEY"
+	// envAPIURL points sb at a dev or test API instead of production. It's
+	// for String Bird's own development, so it isn't documented.
 	envAPIURL = "STRINGBIRD_API_URL"
 )
 
@@ -73,7 +78,9 @@ STRINGBIRD_API_KEY (or --api-key), never from the config file.`,
 	flags := root.PersistentFlags()
 	flags.StringVarP(&a.configPath, "config", "c", config.DefaultPath, "project config file")
 	flags.StringVar(&a.apiKey, "api-key", "", "API key (default $"+envAPIKey+")")
-	flags.StringVar(&a.apiURL, "api-url", "", "API URL (default $"+envAPIURL+", then api_url in the config)")
+	flags.StringVar(&a.apiURL, "api-url", "", "API URL (default $"+envAPIURL+", then "+defaultAPIURL+")")
+	// Hidden like STRINGBIRD_API_URL: users only ever talk to production.
+	_ = flags.MarkHidden("api-url")
 
 	root.AddCommand(a.pushCmd(), a.pullCmd(), a.releaseCmd())
 	return root
@@ -101,12 +108,8 @@ func (a *app) loadProject() (project, error) {
 	if key == "" {
 		return project{}, errors.New("no API key: set " + envAPIKey + " or pass --api-key")
 	}
-	url := firstSet(a.apiURL, a.getenv(envAPIURL), cfg.APIURL)
-	if url == "" {
-		return project{}, errors.New("no API URL: set api_url in " + a.configPath + ", " + envAPIURL + " or --api-url")
-	}
 	client := api.New(api.Options{
-		BaseURL:   url,
+		BaseURL:   a.baseURL(),
 		APIKey:    key,
 		OrgID:     cfg.OrgID,
 		ProjectID: cfg.ProjectID,
@@ -116,6 +119,12 @@ func (a *app) loadProject() (project, error) {
 		client.SetSleep(a.sleep)
 	}
 	return project{cfg: cfg, client: client, dir: filepath.Dir(a.configPath)}, nil
+}
+
+// baseURL is the API to call: production unless --api-url or
+// STRINGBIRD_API_URL point elsewhere.
+func (a *app) baseURL() string {
+	return firstSet(a.apiURL, a.getenv(envAPIURL), defaultAPIURL)
 }
 
 func (a *app) wait(ctx context.Context, d time.Duration) error {

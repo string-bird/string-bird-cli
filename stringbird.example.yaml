@@ -1,9 +1,6 @@
 # Copy to stringbird.yaml at your project root and commit it.
 # The API key never goes here: set STRINGBIRD_API_KEY.
 
-# Your String Bird API URL (or set STRINGBIRD_API_URL).
-api_url: https://api.example.com
-
 # Organization and project ids, from the project's settings in the dashboard.
 org_id: 0193a1b2-0000-7000-8000-000000000001
 project_id: 0193a1b2-0000-7000-8000-000000000002

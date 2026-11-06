@@ -18,22 +18,26 @@ func TestParse(t *testing.T) {
 	}{
 		{
 			name: "full",
-			yaml: `api_url: https://api.example.com
-org_id: org-1
+			yaml: `org_id: org-1
 project_id: proj-1
 files: src/locales/{locale}.json
 format: i18next
 structure: nested
 `,
 			want: Config{
-				APIURL: "https://api.example.com", OrgID: "org-1", ProjectID: "proj-1",
+				OrgID: "org-1", ProjectID: "proj-1",
 				Files: "src/locales/{locale}.json", Format: "i18next", Structure: "nested",
 			},
 		},
 		{
-			name: "api url may come from elsewhere",
+			name: "minimal",
 			yaml: "org_id: o\nproject_id: p\nfiles: '{locale}.json'\n",
 			want: Config{OrgID: "o", ProjectID: "p", Files: "{locale}.json"},
+		},
+		{
+			name:    "no api url: sb always talks to production",
+			yaml:    "api_url: https://api.example.com\norg_id: o\nproject_id: p\nfiles: '{locale}.json'\n",
+			wantErr: "field api_url not found",
 		},
 		{
 			name:    "empty",

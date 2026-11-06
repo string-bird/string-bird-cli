@@ -30,7 +30,6 @@ Put a `stringbird.yaml` at your project root and commit it
 (see [stringbird.example.yaml](stringbird.example.yaml)):
 
 ```yaml
-api_url: https://api.example.com          # your String Bird API URL
 org_id: 0193a1b2-0000-7000-8000-000000000001
 project_id: 0193a1b2-0000-7000-8000-000000000002
 files: src/locales/{locale}.json          # relative to this file
@@ -40,7 +39,6 @@ format: json                              # json (ICU) or i18next
 
 | Field | Meaning |
 |---|---|
-| `api_url` | The API's base URL. `STRINGBIRD_API_URL` or `--api-url` override it. |
 | `org_id`, `project_id` | Ids from the project's settings in the dashboard. |
 | `files` | One file per locale; `{locale}` is replaced by the BCP 47 code (`en`, `de-AT`). |
 | `format` | `json`: values are ICU MessageFormat (FormatJS, i18next-icu). `i18next`: classic i18next v4 JSON (`{{name}}`, `key_one`/`key_other`), converted to and from ICU by the server. Default `json`. |

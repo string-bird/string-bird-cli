@@ -21,7 +21,6 @@ const LocalePlaceholder = "{locale}"
 // Config is the project config. It never holds the API key: that comes from
 // STRINGBIRD_API_KEY or --api-key, so the file can be committed.
 type Config struct {
-	APIURL    string `yaml:"api_url"`
 	OrgID     string `yaml:"org_id"`
 	ProjectID string `yaml:"project_id"`
 	// Files is the path of the translation files relative to the config file,

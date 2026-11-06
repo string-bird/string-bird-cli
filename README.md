@@ -5,12 +5,14 @@
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
 `sb` connects your codebase to [String Bird](https://stringbird.io), the translation
-management platform. Push source strings, pull translations, and publish releases to the
-CDN your apps load them from, from your terminal or CI.
+management platform. Sync translation files, machine-translate and approve, check how
+complete each locale is, and publish releases to the CDN your apps load them from, from
+your terminal or CI.
 
 ```bash
 sb push                                        # upload new and changed source strings
-sb pull                                        # download translations for every locale
+sb translate --wait                            # machine-translate what's missing
+sb status --min 100                            # fail unless every locale is ready
 sb release create --env staging --wait         # publish approved translations to staging
 sb release promote production --from staging   # ship exactly what staging serves
 ```
@@ -53,12 +55,19 @@ sb release promote production --from staging   # ship exactly what staging serve
    Wrote stringbird.yaml for project Web (web): json files at src/locales/{locale}.json
    ```
 
-4. **Sync:**
+4. **Sync your strings:**
 
    ```bash
    sb push --dry-run   # preview
    sb push             # upload src/locales/en.json (your base locale)
    sb pull             # write src/locales/de.json, fr.json, ...
+   ```
+
+5. **Release** once translations are approved:
+
+   ```bash
+   sb status                                  # what's still missing
+   sb release create --env production --wait  # publish to the CDN
    ```
 
 ## Installation
@@ -108,7 +117,7 @@ structure: flat
 |---|---|---|
 | `org_id` | yes | Organization id, from the dashboard. |
 | `project_id` | yes | Project id or slug (`web`). An id saves a lookup on every run. |
-| `files` | yes | Path to the translation files, relative to the config file. `{locale}` is replaced by the locale code (`en`, `de-AT`) and may appear more than once, e.g. `i18n/{locale}/messages.json`. |
+| `files` | for `push`, `pull` | Path to the translation files, relative to the config file. `{locale}` is replaced by the locale code (`en`, `de-AT`) and may appear more than once, e.g. `i18n/{locale}/messages.json`. |
 | `format` | no | `json` (default): values are ICU MessageFormat, as used by FormatJS and i18next-icu. `i18next`: classic i18next v4 JSON (`{{name}}`, `key_one` / `key_other`); the server converts it to and from ICU. |
 | `structure` | no | Key layout of pulled files: `flat` (`"auth.login.title"`) or `nested`. Defaults to `flat` for `json` and `nested` for `i18next`. |
 
@@ -151,32 +160,37 @@ The key's role decides what `sb` may do:
 | `sb push` to existing keys, `sb translate`, `sb approve` | translator |
 | `sb push` adding keys, `--delete-missing` | developer |
 | `sb release create`, `sb release promote`, `sb env create`, `sb locales add` | developer |
-
-API keys work inside their own organization only: they can't list your other
-organizations, or manage members, settings or billing.
+| `sb api` | whatever the route needs |
 
 Keys can also be limited to certain projects, and to certain environments for releasing
 and promoting. Use the narrowest key that does the job, e.g. a viewer key for builds that
 only pull.
 
+API keys work inside their own organization only: they can't list your other
+organizations, or manage members, settings or billing. Use the dashboard for those.
+
 ## Commands
 
 | Command | Description |
 |---|---|
+| **Sync** | |
 | [`sb init`](#sb-init) | Create `stringbird.yaml` |
 | [`sb push`](#sb-push) | Upload the source file, and optionally translations |
 | [`sb pull`](#sb-pull) | Download translated files |
+| **Translate** | |
 | [`sb status`](#sb-status) | How complete each locale is; gate CI on it |
 | [`sb translate`](#sb-translate) | Machine-translate what's missing |
 | [`sb approve`](#sb-approve) | Approve machine translations |
+| **Release** | |
 | [`sb release create`](#sb-release-create) | Publish approved translations as a release |
-| [`sb release promote`](#sb-release-promote-environment) | Point an environment at a release, or roll back |
-| [`sb release list`, `sb release diff`](#sb-release-list-and-sb-release-diff) | Release history and changes |
+| [`sb release promote`](#sb-release-promote) | Point an environment at a release, or roll back |
+| [`sb release list`, `sb release diff`](#sb-release-list-and-sb-release-diff) | Release history and what changed |
 | [`sb env`](#sb-env) | List and create environments |
-| [`sb projects`, `sb locales`, `sb keys`](#sb-projects-sb-locales-sb-keys) | Browse the project |
+| **Browse** | |
+| [`sb projects`, `sb locales`, `sb keys`](#sb-projects-sb-locales-sb-keys) | Projects, locales and keys |
 | [`sb api`](#sb-api) | Call any API route |
 
-Every command that lists something takes `--json` for scripts.
+The `list` commands, `sb status` and `sb translate` take `--json` for scripts.
 
 Global flags:
 
@@ -188,9 +202,11 @@ Global flags:
 | `--project <id or slug>` | Project. Overrides `project_id`. |
 | `--files <path>` | Translation files path with `{locale}`. Overrides `files`. |
 | `-h, --help` | Help for any command. |
-| `--version` | Print the version. |
+| `-v, --version` | Print the version. |
 
-### `sb init`
+### Sync
+
+#### `sb init`
 
 Creates `stringbird.yaml`. Values come from `--org`, `--project` and `--files` (or the
 environment variables); anything missing is asked for when running in a terminal:
@@ -213,7 +229,7 @@ Outside a terminal `sb init` never prompts: pass every value as a flag.
 sb init --org 0193a1b2-... --project web --files "src/locales/{locale}.json"
 ```
 
-### `sb push`
+#### `sb push`
 
 Uploads translation files to String Bird. By default only the base-locale (source) file
 is pushed: new keys are added and changed source texts are saved, which marks their
@@ -245,7 +261,7 @@ dry run en (src/locales/en.json): 1 key added, 1 updated, 1 key deleted, 40 unch
 > source file, pull the rest. To seed translations once, use
 > `sb push --translations --skip-existing`.
 
-### `sb pull`
+#### `sb pull`
 
 Downloads every project locale and writes it to the `files` path, replacing the existing
 file.
@@ -259,7 +275,55 @@ file.
 Keys that the chosen format cannot express (for example ICU `select` in i18next format)
 are left out with a warning.
 
-### `sb release create`
+### Translate
+
+#### `sb status`
+
+Counts, per locale, the keys that still need work, and the share that is ready:
+translated, approved and up to date, which is what a release ships.
+
+```console
+$ sb status
+LOCALE  READY  MISSING  OUTDATED  UNAPPROVED
+de      96.5%  3        2         4
+fr      100%   0        0         0
+```
+
+| Flag | Description |
+|---|---|
+| `-l, --locale <code>` | Only these locales. Default every locale but the base. |
+| `--min <percent>` | Exit with 1 when a locale is less ready than this. |
+
+#### `sb translate`
+
+Starts a machine translation run. Results are saved awaiting approval and never replace a
+person's translation. Nothing to translate is not an error.
+
+| Flag | Description |
+|---|---|
+| `-l, --locale <code>` | Only these locales. Default every locale but the base. |
+| `--scope <scope>` | `missing` (default), `outdated` (base text changed since) or `needed` (both). |
+| `--wait` | Follow the run; exit with 1 if it fails or a string can't be translated. |
+| `--timeout <duration>` | How long `--wait` waits. Default `30m`. |
+
+#### `sb approve`
+
+Approves machine translations so releases include them. Outdated translations are skipped:
+translate them again first.
+
+| Flag | Description |
+|---|---|
+| `--run <id>` | What one `sb translate` run wrote; `sb translate --wait` prints the id. |
+| `-l, --locale <code>` | A locale's machine translations. |
+| `--prefix <prefix>` | Only keys starting with this. Combines with either of the above. |
+
+```bash
+sb approve --locale de --prefix checkout.
+```
+
+### Release
+
+#### `sb release create`
 
 Takes a snapshot of all approved translations as the next release (`v1`, `v2`, ...) and
 publishes it to the CDN. Releases are immutable.
@@ -271,22 +335,23 @@ publishes it to the CDN. Releases are immutable.
 | `--wait` | Wait until the release is published, and fail if publishing fails. |
 | `--timeout <duration>` | How long `--wait` waits. Default `5m`. |
 
-### `sb release promote <environment>`
+#### `sb release promote`
 
-Points an environment at an existing release. Nothing is rebuilt: the environment serves
-exactly what the release contains. Promoting an older release is a rollback.
+`sb release promote <environment>` points an environment at an existing release. Nothing
+is rebuilt: the environment serves exactly what the release contains. Promoting an older
+release is a rollback.
 
 | Flag | Description |
 |---|---|
 | `--from <environment>` | Use the release another environment currently serves. |
-| `--release <ref>` | Use a release by version (`12` or `v12`) or id. |
+| `--release <ref>` | Use a release by version (`12` or `v12`), id, or environment name. |
 
 ```bash
 sb release promote production --from staging   # promote
 sb release promote production --release v11    # roll back
 ```
 
-### `sb release list` and `sb release diff`
+#### `sb release list` and `sb release diff`
 
 `sb release list` shows releases newest first, with the environments each is live in.
 `sb release diff <release>` shows the keys added, changed and removed per locale, against
@@ -303,57 +368,18 @@ de: 1 added, 1 changed, 0 removed
 
 | Flag | Description |
 |---|---|
-| `--limit <n>` | `list`: how many releases. Default 20. |
+| `--limit <n>` | `list`: how many releases, up to 200. Default 20. |
 | `--against <release>` | `diff`: what to compare with. Default the release before. |
 | `--stat` | `diff`: counts per locale only. |
 
-### `sb env`
+#### `sb env`
 
 `sb env list` shows each environment and the release it serves. `sb env create <name>`
 adds one (lowercase letters, digits and dashes), for example `staging` or `pr-42`.
 
-### `sb status`
+### Browse
 
-Counts, per locale, the keys that still need work, and the share that is ready:
-translated, approved and up to date.
-
-```console
-$ sb status
-LOCALE  READY  MISSING  OUTDATED  UNAPPROVED
-de      96.5%  3        2         4
-fr      100%   0        0         0
-```
-
-| Flag | Description |
-|---|---|
-| `-l, --locale <code>` | Only these locales. Default every locale but the base. |
-| `--min <percent>` | Exit with 1 when a locale is less ready than this. |
-
-### `sb translate`
-
-Starts a machine translation run. Results are saved awaiting approval and never replace a
-person's translation.
-
-| Flag | Description |
-|---|---|
-| `-l, --locale <code>` | Only these locales. Default every locale but the base. |
-| `--scope <scope>` | `missing` (default), `outdated` (base text changed since) or `needed` (both). |
-| `--wait` | Follow the run; exit with 1 if it fails or a string can't be translated. |
-| `--timeout <duration>` | How long `--wait` waits. Default `30m`. |
-
-Nothing to translate is not an error.
-
-### `sb approve`
-
-Approves machine translations so releases include them: `--run <id>` for what one
-`sb translate` run wrote, `--locale <code>` for a locale, and `--prefix` to narrow either.
-Outdated translations are skipped.
-
-```bash
-sb translate --wait && sb approve --locale de --prefix checkout.
-```
-
-### `sb projects`, `sb locales`, `sb keys`
+#### `sb projects`, `sb locales`, `sb keys`
 
 | Command | Description |
 |---|---|
@@ -366,7 +392,7 @@ sb translate --wait && sb approve --locale de --prefix checkout.
 what needs work in one locale with `--missing de`, `--outdated de` or `--unapproved de`.
 `--limit` caps the count.
 
-### `sb api`
+#### `sb api`
 
 Calls any route an API key can reach, with authentication and your org and project filled
 in. A path is relative to your project, unless it starts with `/v1/`, where `{org}` and
@@ -396,13 +422,23 @@ The response is printed as returned, with JSON indented; an error status exits w
 
 ## Continuous integration
 
-`sb` is built for CI: it never prompts, exits with a non-zero status on any failure, and
-retries rate-limited requests automatically.
+`sb` is built for CI: it never prompts outside a terminal, exits with a non-zero status on
+any failure, and retries rate-limited requests automatically.
 
 ### GitHub Actions
 
 This repository is also a GitHub Action that installs `sb` on Linux, macOS and Windows
 runners.
+
+| Input | Description |
+|---|---|
+| `version` | Release to install, e.g. `v0.1.0`. Default `latest`. |
+
+| Output | Description |
+|---|---|
+| `version` | The release that was installed. |
+
+Push source strings on every change to `main` and publish to staging:
 
 ```yaml
 name: translations
@@ -415,33 +451,25 @@ on:
 jobs:
   sync:
     runs-on: ubuntu-latest
+    env:
+      STRINGBIRD_API_KEY: ${{ secrets.STRINGBIRD_API_KEY }}
     steps:
       - uses: actions/checkout@v5
       - uses: string-bird/string-bird-cli@v0
       - run: sb push
       - run: sb release create --env staging --wait --note "${{ github.sha }}"
-    env:
-      STRINGBIRD_API_KEY: ${{ secrets.STRINGBIRD_API_KEY }}
 ```
 
-To preview a pull request's effect on your strings, run `sb push --dry-run` in a
-`pull_request` workflow. It needs a key that is allowed to push (translator or developer),
-but saves nothing.
-
-To block a production deploy until every locale is fully translated and approved:
+Block a production promotion until every locale is fully translated and approved:
 
 ```yaml
       - run: sb status --min 100
       - run: sb release promote production --from staging
 ```
 
-| Input | Description |
-|---|---|
-| `version` | Release to install, e.g. `v0.1.0`. Default `latest`. |
-
-| Output | Description |
-|---|---|
-| `version` | The release that was installed. |
+To preview a pull request's effect on your strings, run `sb push --dry-run` in a
+`pull_request` workflow. It needs a key that may push (translator or developer), but saves
+nothing.
 
 ### Other CI systems
 
@@ -470,10 +498,12 @@ sb: get project: invalid_api_key: the API key is invalid, revoked or expired (HT
 | `org_not_found`, `project_not_found` | Wrong id in `stringbird.yaml`, or the key has no access to that project. |
 | `forbidden` | The key's role is too low for this action. See [Authentication](#authentication). |
 | `environment_not_allowed` | The key is limited to other environments. |
-| `locale_not_found` | The locale isn't in the project. Add it in the dashboard first. |
+| `api_key_not_allowed` | The route needs a signed-in person, not an API key (members, settings, billing). |
+| `locale_not_found` | The locale isn't in the project. Add it with `sb locales add`. |
 | `invalid_import` | The file has invalid entries; each one is listed above the error. |
 | `plan_limit_reached` | The change would exceed your plan (e.g. number of keys). Nothing was saved. |
 | `nothing_to_release` | The project has no approved translations yet. |
+| `mt_disabled`, `mt_budget_exhausted` | Machine translation is off for the organization, or this month's words are used up. |
 | `rate_limited` | Too many requests. `sb` retries automatically; this appears only if retries run out. |
 
 ## Development

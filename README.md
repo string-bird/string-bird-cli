@@ -147,16 +147,36 @@ The key's role decides what `sb` may do:
 
 | Action | Minimum role |
 |---|---|
-| `sb pull` | viewer |
-| `sb push` to existing keys | translator |
+| `sb pull`, `sb status`, and every `list` command | viewer |
+| `sb push` to existing keys, `sb translate`, `sb approve` | translator |
 | `sb push` adding keys, `--delete-missing` | developer |
-| `sb release create`, `sb release promote` | developer |
+| `sb release create`, `sb release promote`, `sb env create`, `sb locales add` | developer |
+
+API keys work inside their own organization only: they can't list your other
+organizations, or manage members, settings or billing.
 
 Keys can also be limited to certain projects, and to certain environments for releasing
 and promoting. Use the narrowest key that does the job, e.g. a viewer key for builds that
 only pull.
 
 ## Commands
+
+| Command | Description |
+|---|---|
+| [`sb init`](#sb-init) | Create `stringbird.yaml` |
+| [`sb push`](#sb-push) | Upload the source file, and optionally translations |
+| [`sb pull`](#sb-pull) | Download translated files |
+| [`sb status`](#sb-status) | How complete each locale is; gate CI on it |
+| [`sb translate`](#sb-translate) | Machine-translate what's missing |
+| [`sb approve`](#sb-approve) | Approve machine translations |
+| [`sb release create`](#sb-release-create) | Publish approved translations as a release |
+| [`sb release promote`](#sb-release-promote-environment) | Point an environment at a release, or roll back |
+| [`sb release list`, `sb release diff`](#sb-release-list-and-sb-release-diff) | Release history and changes |
+| [`sb env`](#sb-env) | List and create environments |
+| [`sb projects`, `sb locales`, `sb keys`](#sb-projects-sb-locales-sb-keys) | Browse the project |
+| [`sb api`](#sb-api) | Call any API route |
+
+Every command that lists something takes `--json` for scripts.
 
 Global flags:
 
@@ -266,6 +286,114 @@ sb release promote production --from staging   # promote
 sb release promote production --release v11    # roll back
 ```
 
+### `sb release list` and `sb release diff`
+
+`sb release list` shows releases newest first, with the environments each is live in.
+`sb release diff <release>` shows the keys added, changed and removed per locale, against
+the previous release or `--against` another. A release is a version, an id, or an
+environment name for the release it serves, so you can review a promotion first:
+
+```console
+$ sb release diff staging --against production
+v14 against v13
+de: 1 added, 1 changed, 0 removed
+  + checkout.title: "Kasse"
+  ~ auth.login: "Anmelden" → "Einloggen"
+```
+
+| Flag | Description |
+|---|---|
+| `--limit <n>` | `list`: how many releases. Default 20. |
+| `--against <release>` | `diff`: what to compare with. Default the release before. |
+| `--stat` | `diff`: counts per locale only. |
+
+### `sb env`
+
+`sb env list` shows each environment and the release it serves. `sb env create <name>`
+adds one (lowercase letters, digits and dashes), for example `staging` or `pr-42`.
+
+### `sb status`
+
+Counts, per locale, the keys that still need work, and the share that is ready:
+translated, approved and up to date.
+
+```console
+$ sb status
+LOCALE  READY  MISSING  OUTDATED  UNAPPROVED
+de      96.5%  3        2         4
+fr      100%   0        0         0
+```
+
+| Flag | Description |
+|---|---|
+| `-l, --locale <code>` | Only these locales. Default every locale but the base. |
+| `--min <percent>` | Exit with 1 when a locale is less ready than this. |
+
+### `sb translate`
+
+Starts a machine translation run. Results are saved awaiting approval and never replace a
+person's translation.
+
+| Flag | Description |
+|---|---|
+| `-l, --locale <code>` | Only these locales. Default every locale but the base. |
+| `--scope <scope>` | `missing` (default), `outdated` (base text changed since) or `needed` (both). |
+| `--wait` | Follow the run; exit with 1 if it fails or a string can't be translated. |
+| `--timeout <duration>` | How long `--wait` waits. Default `30m`. |
+
+Nothing to translate is not an error.
+
+### `sb approve`
+
+Approves machine translations so releases include them: `--run <id>` for what one
+`sb translate` run wrote, `--locale <code>` for a locale, and `--prefix` to narrow either.
+Outdated translations are skipped.
+
+```bash
+sb translate --wait && sb approve --locale de --prefix checkout.
+```
+
+### `sb projects`, `sb locales`, `sb keys`
+
+| Command | Description |
+|---|---|
+| `sb projects list` | Projects your key can see; `*` marks the configured one. Needs only `--org`. |
+| `sb locales list` | The project's locales. |
+| `sb locales add <code>...` | Add locales; codes are stored canonical (`pt-br` → `pt-BR`). |
+| `sb keys list` | Keys with their base-locale text. |
+
+`sb keys list` filters with `--prefix auth.`, shows another locale with `-l de`, and lists
+what needs work in one locale with `--missing de`, `--outdated de` or `--unapproved de`.
+`--limit` caps the count.
+
+### `sb api`
+
+Calls any route an API key can reach, with authentication and your org and project filled
+in. A path is relative to your project, unless it starts with `/v1/`, where `{org}` and
+`{project}` are replaced.
+
+```bash
+sb api "/keys?status=missing&locale=de"
+sb api /v1/orgs/{org}/projects
+sb api /locales -f locale=it                         # fields make it a POST
+sb api -X GET /keys -f prefix=auth.                  # or query parameters with -X GET
+sb api "/import?locale=de&dry_run=true" --input locales/de.json
+```
+
+| Flag | Description |
+|---|---|
+| `-X, --method <method>` | Default `GET`, or `POST` with fields or `--input`. |
+| `-f, --field key=value` | String field. Query parameter for `GET`/`DELETE`, JSON body otherwise. |
+| `-F, --typed-field key=value` | Same, with the value read as JSON (`true`, `42`, `["a"]`). |
+| `--input <file>` | Send a file as the body, `-` for stdin. |
+| `-i, --include` | Print the status line and headers. |
+
+The response is printed as returned, with JSON indented; an error status exits with 1.
+
+> [!NOTE]
+> Git Bash on Windows rewrites arguments that start with `/` into Windows paths. Leave out
+> the leading slash (`sb api keys`) or set `MSYS_NO_PATHCONV=1`.
+
 ## Continuous integration
 
 `sb` is built for CI: it never prompts, exits with a non-zero status on any failure, and
@@ -299,6 +427,13 @@ jobs:
 To preview a pull request's effect on your strings, run `sb push --dry-run` in a
 `pull_request` workflow. It needs a key that is allowed to push (translator or developer),
 but saves nothing.
+
+To block a production deploy until every locale is fully translated and approved:
+
+```yaml
+      - run: sb status --min 100
+      - run: sb release promote production --from staging
+```
 
 | Input | Description |
 |---|---|

@@ -42,7 +42,7 @@ Machine translations awaiting approval are left out unless --include-unapproved.
 }
 
 func (a *app) pull(ctx context.Context, opts pullOptions) error {
-	p, err := a.loadProject()
+	p, err := a.loadProject(ctx)
 	if err != nil {
 		return err
 	}

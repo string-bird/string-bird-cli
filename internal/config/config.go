@@ -1,4 +1,4 @@
-// Package config reads the project config file, stringbird.yaml.
+// Package config reads and writes the project config file, stringbird.yaml.
 package config
 
 import (
@@ -8,6 +8,7 @@ import (
 	"io"
 	"os"
 	"regexp"
+	"strconv"
 	"strings"
 
 	"go.yaml.in/yaml/v3"
@@ -22,7 +23,8 @@ const LocalePlaceholder = "{locale}"
 // Config is the project config. It never holds the API key: that comes from
 // STRINGBIRD_API_KEY or --api-key, so the file can be committed.
 type Config struct {
-	OrgID     string `yaml:"org_id"`
+	OrgID string `yaml:"org_id"`
+	// ProjectID is the project's id or its slug.
 	ProjectID string `yaml:"project_id"`
 	// Files is the path of the translation files relative to the config file,
 	// with {locale} where the locale code goes: locales/{locale}.json.
@@ -38,7 +40,8 @@ type Config struct {
 	APIKey string `yaml:"api_key"`
 }
 
-// Load reads and checks the config at path.
+// Load reads the config at path. It doesn't check that every field is set:
+// flags and environment variables can fill in the rest; call Validate after.
 func Load(path string) (Config, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -54,8 +57,8 @@ func Load(path string) (Config, error) {
 // unquotedBrace finds a value starting with an unquoted {, like {locale}.
 var unquotedBrace = regexp.MustCompile(`(?m)^\s*\w+:\s*\{`)
 
-// Parse decodes and checks a config. Unknown fields are errors, so typos
-// don't go unnoticed.
+// Parse decodes a config. Unknown fields are errors, so typos don't go
+// unnoticed, and so is an API key.
 func Parse(data []byte) (Config, error) {
 	var cfg Config
 	dec := yaml.NewDecoder(bytes.NewReader(data))
@@ -67,16 +70,15 @@ func Parse(data []byte) (Config, error) {
 		}
 		return Config{}, fmt.Errorf("parse config: %w", err)
 	}
-	if err := cfg.check(); err != nil {
-		return Config{}, err
+	if cfg.APIKey != "" {
+		return Config{}, errors.New("api_key doesn't belong in the config file; set STRINGBIRD_API_KEY or pass --api-key")
 	}
 	return cfg, nil
 }
 
-func (c Config) check() error {
-	if c.APIKey != "" {
-		return errors.New("api_key doesn't belong in the config file; set STRINGBIRD_API_KEY or pass --api-key")
-	}
+// Validate checks that the config can be used: every required field set and
+// a {locale} placeholder in Files. Missing fields are named by their YAML key.
+func (c Config) Validate() error {
 	var missing []string
 	for _, f := range []struct{ name, value string }{
 		{"org_id", c.OrgID},
@@ -88,7 +90,7 @@ func (c Config) check() error {
 		}
 	}
 	if len(missing) > 0 {
-		return fmt.Errorf("missing %s", strings.Join(missing, ", "))
+		return &MissingError{Fields: missing}
 	}
 	if !strings.Contains(c.Files, LocalePlaceholder) {
 		return fmt.Errorf("files %q needs a %s placeholder", c.Files, LocalePlaceholder)
@@ -96,7 +98,48 @@ func (c Config) check() error {
 	return nil
 }
 
+// MissingError names the required fields a config lacks.
+type MissingError struct {
+	Fields []string
+}
+
+func (e *MissingError) Error() string {
+	return "missing " + strings.Join(e.Fields, ", ")
+}
+
 // FilePath is the file of one locale.
 func (c Config) FilePath(locale string) string {
 	return strings.ReplaceAll(c.Files, LocalePlaceholder, locale)
+}
+
+// Encode renders the config as a commented stringbird.yaml. projectNote, when
+// set, is written as a comment after the project id (its name, say).
+func (c Config) Encode(projectNote string) []byte {
+	var b strings.Builder
+	b.WriteString("# String Bird project config: https://github.com/string-bird/string-bird-cli#configuration\n")
+	b.WriteString("# The API key never goes here: set STRINGBIRD_API_KEY.\n")
+	fmt.Fprintf(&b, "org_id: %s\n", quote(c.OrgID))
+	fmt.Fprintf(&b, "project_id: %s", quote(c.ProjectID))
+	if projectNote != "" {
+		fmt.Fprintf(&b, " # %s", projectNote)
+	}
+	b.WriteString("\n")
+	fmt.Fprintf(&b, "files: %s\n", quote(c.Files))
+	if c.Format != "" {
+		fmt.Fprintf(&b, "format: %s\n", quote(c.Format))
+	}
+	if c.Structure != "" {
+		fmt.Fprintf(&b, "structure: %s\n", quote(c.Structure))
+	}
+	return []byte(b.String())
+}
+
+// plainScalar is a value YAML reads back as the same string without quotes.
+var plainScalar = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._/-]*$`)
+
+func quote(s string) string {
+	if plainScalar.MatchString(s) && s != "true" && s != "false" && s != "null" {
+		return s
+	}
+	return strconv.Quote(s)
 }

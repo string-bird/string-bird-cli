@@ -127,7 +127,7 @@ func TestAPIURL(t *testing.T) {
 		},
 		{
 			name: "unreachable", env: "http://127.0.0.1:1",
-			wantCode: 1, wantStderr: "get project: GET /v1/orgs/org-1/projects/proj-1",
+			wantCode: 1, wantStderr: "get project: GET /v1/orgs/" + testOrg + "/projects/" + testProject,
 		},
 		{
 			name: "not configurable in the file", env: "fake", config: "api_url: http://127.0.0.1:1\n",

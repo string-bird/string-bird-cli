@@ -60,7 +60,7 @@ func TestBinary(t *testing.T) {
 	bin := buildSB(t)
 
 	api := http.NewServeMux()
-	api.HandleFunc("GET /v1/orgs/o/projects/p", func(w http.ResponseWriter, r *http.Request) {
+	api.HandleFunc("GET /v1/orgs/o/projects/01a1b100-0000-7000-8000-0000000000bb", func(w http.ResponseWriter, r *http.Request) {
 		if r.Header.Get("Authorization") != "Bearer sb_k" {
 			w.WriteHeader(http.StatusUnauthorized)
 			w.Write([]byte(`{"error":{"code":"invalid_api_key","message":"invalid API key"}}`))
@@ -69,7 +69,7 @@ func TestBinary(t *testing.T) {
 		assert.Equal(t, "sb/1.2.3", r.Header.Get("User-Agent"))
 		w.Write([]byte(`{"project":{"id":"p","base_locale":"en","locales":["en"]}}`))
 	})
-	api.HandleFunc("GET /v1/orgs/o/projects/p/export", func(w http.ResponseWriter, r *http.Request) {
+	api.HandleFunc("GET /v1/orgs/o/projects/01a1b100-0000-7000-8000-0000000000bb/export", func(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte(`{"hello":"Hello"}`))
 	})
 	srv := httptest.NewServer(api)
@@ -77,7 +77,7 @@ func TestBinary(t *testing.T) {
 
 	project := t.TempDir()
 	require.NoError(t, os.WriteFile(filepath.Join(project, "stringbird.yaml"),
-		[]byte("org_id: o\nproject_id: p\nfiles: locales/{locale}.json\n"), 0o644))
+		[]byte("org_id: o\nproject_id: 01a1b100-0000-7000-8000-0000000000bb\nfiles: locales/{locale}.json\n"), 0o644))
 	env := []string{"STRINGBIRD_API_URL=" + srv.URL, "STRINGBIRD_API_KEY=sb_k"}
 
 	t.Run("version", func(t *testing.T) {
@@ -109,6 +109,6 @@ func TestBinary(t *testing.T) {
 	t.Run("no config here", func(t *testing.T) {
 		res := runSB(t, bin, t.TempDir(), env, "pull")
 		assert.Equal(t, 1, res.code)
-		assert.Contains(t, res.stderr, "sb: read config: open stringbird.yaml")
+		assert.Contains(t, res.stderr, "sb: no stringbird.yaml here: run `sb init`")
 	})
 }

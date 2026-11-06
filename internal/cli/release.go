@@ -57,7 +57,7 @@ func (a *app) releaseCreateCmd() *cobra.Command {
 }
 
 func (a *app) releaseCreate(ctx context.Context, opts releaseCreateOptions) error {
-	p, err := a.loadProject()
+	p, err := a.loadProject(ctx)
 	if err != nil {
 		return err
 	}
@@ -119,7 +119,7 @@ environment serves byte for byte what the release holds.`,
 }
 
 func (a *app) releasePromote(ctx context.Context, environment string, opts releasePromoteOptions) error {
-	p, err := a.loadProject()
+	p, err := a.loadProject(ctx)
 	if err != nil {
 		return err
 	}

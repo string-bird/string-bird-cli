@@ -52,7 +52,7 @@ file exists, overwriting translations that differ unless --skip-existing.`,
 }
 
 func (a *app) push(ctx context.Context, opts pushOptions) error {
-	p, err := a.loadProject()
+	p, err := a.loadProject(ctx)
 	if err != nil {
 		return err
 	}

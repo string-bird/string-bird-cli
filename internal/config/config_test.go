@@ -1,8 +1,10 @@
 package config
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -40,14 +42,9 @@ structure: nested
 			wantErr: "field api_url not found",
 		},
 		{
-			name:    "empty",
-			yaml:    "",
-			wantErr: "missing org_id, project_id, files",
-		},
-		{
-			name:    "no placeholder",
-			yaml:    "org_id: o\nproject_id: p\nfiles: en.json\n",
-			wantErr: `files "en.json" needs a {locale} placeholder`,
+			name: "empty: flags may fill it in",
+			yaml: "",
+			want: Config{},
 		},
 		{
 			name:    "api key",
@@ -86,6 +83,83 @@ structure: nested
 			}
 			require.NoError(t, err)
 			assert.Equal(t, tt.want, got)
+		})
+	}
+}
+
+func TestValidate(t *testing.T) {
+	tests := []struct {
+		name        string
+		cfg         Config
+		wantErr     string
+		wantMissing []string
+	}{
+		{name: "complete", cfg: Config{OrgID: "o", ProjectID: "p", Files: "{locale}.json"}},
+		{name: "empty", cfg: Config{}, wantErr: "missing org_id, project_id, files", wantMissing: []string{"org_id", "project_id", "files"}},
+		{name: "blank project", cfg: Config{OrgID: "o", ProjectID: "  ", Files: "{locale}.json"}, wantErr: "missing project_id", wantMissing: []string{"project_id"}},
+		{name: "no placeholder", cfg: Config{OrgID: "o", ProjectID: "p", Files: "en.json"}, wantErr: `files "en.json" needs a {locale} placeholder`},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := tt.cfg.Validate()
+
+			if tt.wantErr == "" {
+				require.NoError(t, err)
+				return
+			}
+			require.EqualError(t, err, tt.wantErr)
+			var missing *MissingError
+			if tt.wantMissing != nil {
+				require.ErrorAs(t, err, &missing)
+				assert.Equal(t, tt.wantMissing, missing.Fields)
+			} else {
+				assert.False(t, errors.As(err, &missing))
+			}
+		})
+	}
+}
+
+func TestEncode(t *testing.T) {
+	tests := []struct {
+		name string
+		cfg  Config
+		note string
+		want string
+	}{
+		{
+			name: "everything",
+			cfg: Config{
+				OrgID: "01a1b100-0000-7000-8000-00000000000a", ProjectID: "01a1b100-0000-7000-8000-00000000000b",
+				Files: "{locale}/app.json", Format: "i18next", Structure: "nested",
+			},
+			note: "Web app (web)",
+			want: `org_id: 01a1b100-0000-7000-8000-00000000000a
+project_id: 01a1b100-0000-7000-8000-00000000000b # Web app (web)
+files: "{locale}/app.json"
+format: i18next
+structure: nested
+`,
+		},
+		{
+			name: "plain path, no note or optional fields",
+			cfg:  Config{OrgID: "o", ProjectID: "p", Files: "src/locales/{locale}.json"},
+			want: "org_id: o\nproject_id: p\nfiles: \"src/locales/{locale}.json\"\n",
+		},
+		{
+			name: "values YAML would misread",
+			cfg:  Config{OrgID: "true", ProjectID: "a: b", Files: "l/{locale}.json # x"},
+			want: "org_id: \"true\"\nproject_id: \"a: b\"\nfiles: \"l/{locale}.json # x\"\n",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			out := tt.cfg.Encode(tt.note)
+
+			assert.True(t, strings.HasPrefix(string(out), "# String Bird project config"))
+			assert.True(t, strings.HasSuffix(string(out), tt.want), string(out))
+			back, err := Parse(out)
+			require.NoError(t, err)
+			assert.Equal(t, tt.cfg, back, "round trip")
 		})
 	}
 }

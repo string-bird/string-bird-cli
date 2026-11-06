@@ -22,8 +22,8 @@ import (
 
 const (
 	testKey     = "sb_test_key"
-	testOrg     = "org-1"
-	testProject = "proj-1"
+	testOrg     = "01a1b100-0000-7000-8000-00000000000a"
+	testProject = "01a1b100-0000-7000-8000-00000000000b"
 )
 
 // fakeAPI is a hand-written stand-in for the String Bird API: the routes the
@@ -31,7 +31,9 @@ const (
 type fakeAPI struct {
 	mu sync.Mutex
 
-	project  api.Project
+	project api.Project
+	// projects is what the org-level project list shows; nil means just project.
+	projects []api.Project
 	exports  map[string]fakeExport // by locale
 	releases []api.Release         // oldest first
 	envs     map[string]string     // environment name → release id
@@ -69,7 +71,7 @@ type fakeRequest struct {
 func newFakeAPI() *fakeAPI {
 	return &fakeAPI{
 		project: api.Project{
-			ID: testProject, Slug: "web", BaseLocale: "en", BundleFormat: "icu_flat",
+			ID: testProject, Name: "Web", Slug: "web", BaseLocale: "en", BundleFormat: "icu_flat",
 			Locales: []string{"de", "en", "fr"},
 		},
 		exports: map[string]fakeExport{},
@@ -95,6 +97,9 @@ func (f *fakeAPI) handler() http.Handler {
 	route("GET /releases/{id}", f.getRelease)
 	route("GET /environments", f.listEnvironments)
 	route("PUT /environments/{name}", f.promote)
+	mux.HandleFunc("GET /v1/orgs/{org}/projects", func(w http.ResponseWriter, r *http.Request) {
+		f.serve(w, r, "GET /projects", f.listProjects)
+	})
 	return mux
 }
 
@@ -110,6 +115,9 @@ func (f *fakeAPI) serve(w http.ResponseWriter, r *http.Request, route string, h 
 		query[k] = v[0]
 	}
 	path := strings.TrimPrefix(r.URL.Path, "/v1/orgs/"+r.PathValue("org")+"/projects/"+r.PathValue("project"))
+	if r.PathValue("project") == "" {
+		path = "(org)/projects"
+	}
 	f.requests = append(f.requests, fakeRequest{method: r.Method, path: path, query: query, body: string(body)})
 	r.Body = io.NopCloser(strings.NewReader(string(body)))
 
@@ -118,7 +126,7 @@ func (f *fakeAPI) serve(w http.ResponseWriter, r *http.Request, route string, h 
 		writeError(w, fakeError{status: http.StatusUnauthorized, code: "invalid_api_key"})
 	case r.PathValue("org") != testOrg:
 		writeError(w, fakeError{status: http.StatusNotFound, code: "org_not_found"})
-	case r.PathValue("project") != testProject:
+	case r.PathValue("project") != "" && r.PathValue("project") != testProject:
 		writeError(w, fakeError{status: http.StatusNotFound, code: "project_not_found"})
 	case f.rateLimited > 0:
 		f.rateLimited--
@@ -131,6 +139,14 @@ func (f *fakeAPI) serve(w http.ResponseWriter, r *http.Request, route string, h 
 		}
 		h(w, r)
 	}
+}
+
+func (f *fakeAPI) listProjects(w http.ResponseWriter, _ *http.Request) {
+	projects := f.projects
+	if projects == nil {
+		projects = []api.Project{f.project}
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"projects": projects})
 }
 
 func (f *fakeAPI) getProject(w http.ResponseWriter, _ *http.Request) {
@@ -304,6 +320,9 @@ type testProjectDir struct {
 	slept []time.Duration
 	// sleepErr is what every wait returns, e.g. a deadline.
 	sleepErr error
+	// stdin is what sb reads from; interactive makes it a terminal.
+	stdin       string
+	interactive bool
 }
 
 func newTestProject(t *testing.T, fake *fakeAPI, extraConfig string) *testProjectDir {
@@ -342,18 +361,31 @@ type runResult struct {
 // run runs sb with the project's config.
 func (p *testProjectDir) run(args ...string) runResult {
 	p.t.Helper()
+	return p.exec(append(args, "--config", filepath.Join(p.dir, "stringbird.yaml")))
+}
+
+// runHere runs sb inside the project folder without --config, so it looks for
+// stringbird.yaml in the working directory like a user's shell would.
+func (p *testProjectDir) runHere(args ...string) runResult {
+	p.t.Helper()
+	p.t.Chdir(p.dir)
+	return p.exec(args)
+}
+
+func (p *testProjectDir) exec(args []string) runResult {
 	var stdout, stderr strings.Builder
 	a := &app{
-		version: "test",
-		stdout:  &stdout,
-		stderr:  &stderr,
-		getenv:  func(k string) string { return p.env[k] },
+		version:     "test",
+		stdin:       strings.NewReader(p.stdin),
+		stdout:      &stdout,
+		stderr:      &stderr,
+		interactive: p.interactive,
+		getenv:      func(k string) string { return p.env[k] },
 		sleep: func(_ context.Context, d time.Duration) error {
 			p.slept = append(p.slept, d)
 			return p.sleepErr
 		},
 	}
-	args = append(args, "--config", filepath.Join(p.dir, "stringbird.yaml"))
 	code := a.run(context.Background(), args)
 	return runResult{code: code, stdout: stdout.String(), stderr: stderr.String()}
 }

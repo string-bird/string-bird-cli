@@ -2,7 +2,6 @@ package api
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -36,12 +35,6 @@ func (e *Error) Error() string {
 	return fmt.Sprintf("%s: %s (HTTP %d)", e.Code, e.Message, e.Status)
 }
 
-// IsCode reports whether err is an API error with the given code.
-func IsCode(err error, code string) bool {
-	var apiErr *Error
-	return errors.As(err, &apiErr) && apiErr.Code == code
-}
-
 func readError(resp *http.Response) *Error {
 	e := &Error{Status: resp.StatusCode, RetryAfter: retryAfter(resp.Header.Get("Retry-After"))}
 	data, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
@@ -59,8 +52,8 @@ func readError(resp *http.Response) *Error {
 	// Not our error shape: a proxy or load balancer answered.
 	e.Code = "http_" + strconv.Itoa(resp.StatusCode)
 	e.Message = strings.TrimSpace(string(data))
-	if len(e.Message) > 200 {
-		e.Message = e.Message[:200] + "…"
+	if r := []rune(e.Message); len(r) > 200 {
+		e.Message = string(r[:200]) + "…"
 	}
 	return e
 }

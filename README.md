@@ -34,19 +34,23 @@ sb release promote production --from staging   # ship exactly what staging serve
    curl -fsSL https://raw.githubusercontent.com/string-bird/string-bird-cli/main/install.sh | sh
    ```
 
-2. **Add `stringbird.yaml`** to your project root. The ids are in the project's settings in
-   the dashboard.
-
-   ```yaml
-   org_id: 0193a1b2-0000-7000-8000-000000000001
-   project_id: 0193a1b2-0000-7000-8000-000000000002
-   files: src/locales/{locale}.json
-   ```
-
-3. **Set an API key**, created in the dashboard under organization settings → API keys:
+2. **Set an API key**, created in the dashboard under organization settings → API keys:
 
    ```bash
    export STRINGBIRD_API_KEY=sb_...
+   ```
+
+3. **Create `stringbird.yaml`** in your project root. `sb init` lists the projects your key
+   can see and finds your locale files:
+
+   ```console
+   $ sb init --org 0193a1b2-0000-7000-8000-000000000001
+   Projects:
+     1) Mobile (mobile)
+     2) Web (web)
+   Project number [1]: 2
+   Translation files, {locale} where the locale goes [src/locales/{locale}.json]:
+   Wrote stringbird.yaml for project Web (web): json files at src/locales/{locale}.json
    ```
 
 4. **Sync:**
@@ -88,12 +92,13 @@ gh attestation verify sb_0.1.0_linux_amd64.tar.gz --repo string-bird/string-bird
 ## Configuration
 
 `sb` reads `stringbird.yaml` from the current directory (or the path given with
-`--config`). Commit it: it holds no secrets. A full example is in
+`--config`). Create it with [`sb init`](#sb-init) and commit it: it holds no secrets, and
+it keeps every developer and CI job on the same project and paths. A full example is in
 [stringbird.example.yaml](stringbird.example.yaml).
 
 ```yaml
 org_id: 0193a1b2-0000-7000-8000-000000000001
-project_id: 0193a1b2-0000-7000-8000-000000000002
+project_id: 0193a1b2-0000-7000-8000-000000000002 # Web (web)
 files: src/locales/{locale}.json
 format: json
 structure: flat
@@ -102,7 +107,7 @@ structure: flat
 | Field | Required | Description |
 |---|---|---|
 | `org_id` | yes | Organization id, from the dashboard. |
-| `project_id` | yes | Project id, from the project's settings. |
+| `project_id` | yes | Project id or slug (`web`). An id saves a lookup on every run. |
 | `files` | yes | Path to the translation files, relative to the config file. `{locale}` is replaced by the locale code (`en`, `de-AT`) and may appear more than once, e.g. `i18n/{locale}/messages.json`. |
 | `format` | no | `json` (default): values are ICU MessageFormat, as used by FormatJS and i18next-icu. `i18next`: classic i18next v4 JSON (`{{name}}`, `key_one` / `key_other`); the server converts it to and from ICU. |
 | `structure` | no | Key layout of pulled files: `flat` (`"auth.login.title"`) or `nested`. Defaults to `flat` for `json` and `nested` for `i18next`. |
@@ -112,6 +117,25 @@ Unknown fields are rejected, so typos surface immediately.
 > [!NOTE]
 > Quote a `files` value that starts with `{`, otherwise YAML reads it as a map:
 > `files: "{locale}/messages.json"`.
+
+### Overrides
+
+Flags and environment variables take precedence over the file, so one run can target
+another project, or `sb` can run with no config file at all, e.g. in a monorepo or a
+one-off CI job:
+
+| Setting | Flag | Environment variable |
+|---|---|---|
+| `org_id` | `--org` | `STRINGBIRD_ORG_ID` |
+| `project_id` | `--project` | `STRINGBIRD_PROJECT_ID` |
+| `files` | `--files` | |
+
+Precedence is flag, then environment variable, then `stringbird.yaml`. A `--files` path is
+relative to the working directory; the one in the file is relative to the file.
+
+```bash
+sb pull --org 0193a1b2-... --project web --files "public/locales/{locale}.json"
+```
 
 ## Authentication
 
@@ -140,8 +164,34 @@ Global flags:
 |---|---|
 | `-c, --config <path>` | Config file. Default `stringbird.yaml`. |
 | `--api-key <key>` | API key. Default `$STRINGBIRD_API_KEY`. |
+| `--org <id>` | Organization id. Overrides `org_id`; see [Overrides](#overrides). |
+| `--project <id or slug>` | Project. Overrides `project_id`. |
+| `--files <path>` | Translation files path with `{locale}`. Overrides `files`. |
 | `-h, --help` | Help for any command. |
 | `--version` | Print the version. |
+
+### `sb init`
+
+Creates `stringbird.yaml`. Values come from `--org`, `--project` and `--files` (or the
+environment variables); anything missing is asked for when running in a terminal:
+
+- With an API key set, the projects the key can see are listed to pick from (a single
+  project is picked automatically), and a slug given with `--project` is checked and saved
+  as the project's id.
+- The files path is suggested from locale files found in the folder, such as
+  `src/locales/en.json` or `public/locales/en/translation.json`.
+- The format (`json` or `i18next`) is detected from the base-locale file's content.
+
+| Flag | Description |
+|---|---|
+| `--format <json\|i18next>` | Set the format instead of detecting it. |
+| `--force` | Replace an existing `stringbird.yaml`. |
+
+Outside a terminal `sb init` never prompts: pass every value as a flag.
+
+```bash
+sb init --org 0193a1b2-... --project web --files "src/locales/{locale}.json"
+```
 
 ### `sb push`
 
@@ -277,8 +327,10 @@ $ sb pull
 sb: get project: invalid_api_key: the API key is invalid, revoked or expired (HTTP 401)
 ```
 
-| Code | Meaning |
+| Message or code | Meaning |
 |---|---|
+| `no stringbird.yaml here` | Run `sb init`, `cd` to the project root, or pass `--org`, `--project` and `--files`. |
+| `project "…" not found` | No project with that slug for this key; the message lists the ones it can see. |
 | `invalid_api_key` | The key is wrong, revoked or expired. Check `STRINGBIRD_API_KEY`. |
 | `org_not_found`, `project_not_found` | Wrong id in `stringbird.yaml`, or the key has no access to that project. |
 | `forbidden` | The key's role is too low for this action. See [Authentication](#authentication). |

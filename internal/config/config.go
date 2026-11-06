@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"regexp"
 	"strings"
 
 	"go.yaml.in/yaml/v3"
@@ -50,6 +51,9 @@ func Load(path string) (Config, error) {
 	return cfg, nil
 }
 
+// unquotedBrace finds a value starting with an unquoted {, like {locale}.
+var unquotedBrace = regexp.MustCompile(`(?m)^\s*\w+:\s*\{`)
+
 // Parse decodes and checks a config. Unknown fields are errors, so typos
 // don't go unnoticed.
 func Parse(data []byte) (Config, error) {
@@ -57,6 +61,10 @@ func Parse(data []byte) (Config, error) {
 	dec := yaml.NewDecoder(bytes.NewReader(data))
 	dec.KnownFields(true)
 	if err := dec.Decode(&cfg); err != nil && !errors.Is(err, io.EOF) {
+		if unquotedBrace.Match(data) {
+			// files: {locale}/app.json reads as a YAML map.
+			return Config{}, fmt.Errorf("parse config: %w (a value starting with { needs quotes: files: \"{locale}/app.json\")", err)
+		}
 		return Config{}, fmt.Errorf("parse config: %w", err)
 	}
 	if err := cfg.check(); err != nil {

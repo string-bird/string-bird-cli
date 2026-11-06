@@ -60,6 +60,16 @@ structure: nested
 			wantErr: "field formt not found",
 		},
 		{
+			name:    "unquoted placeholder first",
+			yaml:    "org_id: o\nproject_id: p\nfiles: {locale}/app.json\n",
+			wantErr: `a value starting with { needs quotes: files: "{locale}/app.json"`,
+		},
+		{
+			name: "quoted placeholder first",
+			yaml: "org_id: o\nproject_id: p\nfiles: \"{locale}/app.json\"\n",
+			want: Config{OrgID: "o", ProjectID: "p", Files: "{locale}/app.json"},
+		},
+		{
 			name:    "not yaml",
 			yaml:    "org_id: [",
 			wantErr: "parse config",

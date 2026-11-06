@@ -132,18 +132,21 @@ func pushLocales(proj api.Project, opts pushOptions) (locales []string, explicit
 func summarize(s api.ImportSummary) string {
 	var parts []string
 	for _, c := range []struct {
-		n    int
-		what string
+		n           int
+		one, others string
 	}{
-		{s.AddedKeys, "keys added"},
-		{s.Created, "translations created"},
-		{s.Updated, "updated"},
-		{s.DeletedKeys, "keys deleted"},
-		{s.SkippedExisting, "skipped as existing"},
-		{s.Unchanged, "unchanged"},
+		{s.AddedKeys, "key added", "keys added"},
+		{s.Created, "translation created", "translations created"},
+		{s.Updated, "updated", "updated"},
+		{s.DeletedKeys, "key deleted", "keys deleted"},
+		{s.SkippedExisting, "skipped as existing", "skipped as existing"},
+		{s.Unchanged, "unchanged", "unchanged"},
 	} {
-		if c.n > 0 {
-			parts = append(parts, fmt.Sprintf("%d %s", c.n, c.what))
+		switch {
+		case c.n == 1:
+			parts = append(parts, "1 "+c.one)
+		case c.n > 1:
+			parts = append(parts, fmt.Sprintf("%d %s", c.n, c.others))
 		}
 	}
 	if len(parts) == 0 {

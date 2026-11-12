@@ -1,4 +1,4 @@
-# Installs sb, the String Bird CLI, from GitHub releases on Windows.
+# Installs sb, the StringBird CLI, from GitHub releases on Windows.
 #
 #   irm https://raw.githubusercontent.com/string-bird/string-bird-cli/main/install.ps1 | iex
 #

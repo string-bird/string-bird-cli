@@ -1,6 +1,6 @@
-name: Set up String Bird CLI
-description: Install sb, the String Bird CLI, and add it to PATH.
-author: String Bird
+name: Set up StringBird CLI
+description: Install sb, the StringBird CLI, and add it to PATH.
+author: StringBird
 branding:
   icon: globe
   color: blue

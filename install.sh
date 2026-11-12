@@ -1,5 +1,5 @@
 #!/bin/sh
-# Installs sb, the String Bird CLI, from GitHub releases.
+# Installs sb, the StringBird CLI, from GitHub releases.
 #
 #   curl -fsSL https://raw.githubusercontent.com/string-bird/string-bird-cli/main/install.sh | sh
 #

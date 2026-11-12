@@ -130,7 +130,7 @@ func (c Config) FilePath(locale string) string {
 // set, is written as a comment after the project id (its name, say).
 func (c Config) Encode(projectNote string) []byte {
 	var b strings.Builder
-	b.WriteString("# String Bird project config: https://github.com/string-bird/string-bird-cli#configuration\n")
+	b.WriteString("# StringBird project config: https://github.com/string-bird/string-bird-cli#configuration\n")
 	b.WriteString("# The API key never goes here: set STRINGBIRD_API_KEY.\n")
 	fmt.Fprintf(&b, "org_id: %s\n", quote(c.OrgID))
 	fmt.Fprintf(&b, "project_id: %s", quote(c.ProjectID))

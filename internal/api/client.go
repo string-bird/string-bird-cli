@@ -1,4 +1,4 @@
-// Package api is a thin client for the String Bird REST API, covering what
+// Package api is a thin client for the StringBird REST API, covering what
 // the CLI needs: projects, import, export, releases and environments.
 package api
 

@@ -1,10 +1,10 @@
-# String Bird CLI
+# StringBird CLI
 
 [![CI](https://github.com/string-bird/string-bird-cli/actions/workflows/ci.yml/badge.svg)](https://github.com/string-bird/string-bird-cli/actions/workflows/ci.yml)
 [![Release](https://img.shields.io/github/v/release/string-bird/string-bird-cli)](https://github.com/string-bird/string-bird-cli/releases)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-`sb` connects your codebase to [String Bird](https://stringbird.io), the translation
+`sb` connects your codebase to [StringBird](https://stringbird.io), the translation
 management platform. Sync translation files, machine-translate and approve, check how
 complete each locale is, and publish releases to the CDN your apps load them from, from
 your terminal or CI.
@@ -80,7 +80,7 @@ Prebuilt binaries for Linux, macOS and Windows (x64 and ARM64) are attached to e
 | macOS, Linux | `curl -fsSL https://raw.githubusercontent.com/string-bird/string-bird-cli/main/install.sh \| sh` |
 | Windows (PowerShell) | `irm https://raw.githubusercontent.com/string-bird/string-bird-cli/main/install.ps1 \| iex` |
 | Homebrew | `brew install string-bird/tap/sb` |
-| Scoop | `scoop bucket add string-bird https://github.com/string-bird/scoop-bucket` then `scoop install string-bird/sb` |
+| Scoop | `scoop bucket add stringbird https://github.com/string-bird/scoop-bucket` then `scoop install stringbird/sb` |
 | Go 1.26+ | `go install github.com/string-bird/string-bird-cli/cmd/sb@latest` |
 
 The install scripts verify the download against the release's `checksums.txt` and accept
@@ -231,7 +231,7 @@ sb init --org 0193a1b2-... --project web --files "src/locales/{locale}.json"
 
 #### `sb push`
 
-Uploads translation files to String Bird. By default only the base-locale (source) file
+Uploads translation files to StringBird. By default only the base-locale (source) file
 is pushed: new keys are added and changed source texts are saved, which marks their
 translations as outdated.
 
@@ -515,7 +515,7 @@ go test ./...
 go build -o sb ./cmd/sb
 ```
 
-Tests run every command against an in-process fake of the String Bird API, and build and
+Tests run every command against an in-process fake of the StringBird API, and build and
 run the binary itself. Releases are cut by pushing a `vX.Y.Z` tag; see
 [.goreleaser.yaml](.goreleaser.yaml) and the [release workflow](.github/workflows/release.yml).
 

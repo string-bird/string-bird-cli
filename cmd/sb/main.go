@@ -1,4 +1,4 @@
-// Command sb is the String Bird client CLI.
+// Command sb is the StringBird client CLI.
 package main
 
 import (

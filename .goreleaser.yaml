@@ -57,7 +57,7 @@ homebrew_casks:
   - name: sb
     binaries: [sb]
     homepage: https://github.com/string-bird/string-bird-cli
-    description: "String Bird CLI: push and pull translation files, publish releases"
+    description: "StringBird CLI: push and pull translation files, publish releases"
     license: MIT
     repository:
       owner: string-bird
@@ -76,12 +76,12 @@ homebrew_casks:
             run "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "{{ .StagedPath }}/sb"]
           end
 
-# scoop bucket add string-bird https://github.com/string-bird/scoop-bucket
-# scoop install string-bird/sb. Published only when SCOOP_BUCKET_TOKEN is set.
+# scoop bucket add stringbird https://github.com/string-bird/scoop-bucket
+# scoop install stringbird/sb. Published only when SCOOP_BUCKET_TOKEN is set.
 scoops:
   - name: sb
     homepage: https://github.com/string-bird/string-bird-cli
-    description: String Bird CLI - push and pull translation files, publish releases
+    description: StringBird CLI - push and pull translation files, publish releases
     license: MIT
     repository:
       owner: string-bird

@@ -26,7 +26,7 @@ const (
 	testProject = "01a1b100-0000-7000-8000-00000000000b"
 )
 
-// fakeAPI is a hand-written stand-in for the String Bird API: the routes the
+// fakeAPI is a hand-written stand-in for the StringBird API: the routes the
 // CLI calls, with in-memory state, recorded requests and injectable errors.
 type fakeAPI struct {
 	mu sync.Mutex

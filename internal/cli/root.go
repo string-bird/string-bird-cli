@@ -21,14 +21,14 @@ import (
 	"github.com/string-bird/string-bird-cli/internal/config"
 )
 
-// defaultAPIURL is the hosted String Bird API, the only one users talk to.
+// defaultAPIURL is the hosted StringBird API, the only one users talk to.
 const defaultAPIURL = "https://api.stringbird.io"
 
 // Environment variables the CLI reads.
 const (
 	envAPIKey = "STRINGBIRD_API_KEY"
 	// envAPIURL points sb at a dev or test API instead of production. It's
-	// for String Bird's own development, so it isn't documented.
+	// for StringBird's own development, so it isn't documented.
 	envAPIURL = "STRINGBIRD_API_URL"
 	// envOrgID and envProjectID override org_id and project_id in the config.
 	envOrgID     = "STRINGBIRD_ORG_ID"
@@ -78,8 +78,8 @@ func (a *app) run(ctx context.Context, args []string) int {
 func (a *app) rootCmd() *cobra.Command {
 	root := &cobra.Command{
 		Use:   "sb",
-		Short: "String Bird client: push and pull translation files, publish releases",
-		Long: `sb is the String Bird client. It uploads source and translation files,
+		Short: "StringBird client: push and pull translation files, publish releases",
+		Long: `sb is the StringBird client. It uploads source and translation files,
 downloads translated files, and publishes releases to the CDN.
 
 Project settings live in stringbird.yaml (sb init creates it); --org,

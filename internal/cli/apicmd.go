@@ -33,7 +33,7 @@ func (a *app) apiCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "api <path>",
 		Short: "Call any API route with your key",
-		Long: `Send a request to the String Bird API and print the response.
+		Long: `Send a request to the StringBird API and print the response.
 
 A path starting with /v1/ is used as is; {org} and {project} in it are
 replaced by your org and project ids. Any other path is relative to your

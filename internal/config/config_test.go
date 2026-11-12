@@ -155,7 +155,7 @@ structure: nested
 		t.Run(tt.name, func(t *testing.T) {
 			out := tt.cfg.Encode(tt.note)
 
-			assert.True(t, strings.HasPrefix(string(out), "# String Bird project config"))
+			assert.True(t, strings.HasPrefix(string(out), "# StringBird project config"))
 			assert.True(t, strings.HasSuffix(string(out), tt.want), string(out))
 			back, err := Parse(out)
 			require.NoError(t, err)

@@ -3,7 +3,7 @@
 #   irm https://raw.githubusercontent.com/string-bird/string-bird-cli/main/install.ps1 | iex
 #
 # Environment:
-#   SB_VERSION      release tag to install (default: the latest release), e.g. v0.1.0
+#   SB_VERSION      release tag to install, e.g. v0.1.0 (default or "latest": the latest release)
 #   SB_INSTALL_DIR  where to put sb.exe (default: %LOCALAPPDATA%\Programs\sb)
 #   SB_DOWNLOAD_BASE  releases URL (default: https://github.com/string-bird/string-bird-cli/releases)
 #
@@ -23,7 +23,7 @@ $arch = switch ($env:PROCESSOR_ARCHITECTURE) {
 }
 
 $tag = $env:SB_VERSION
-if (-not $tag) {
+if (-not $tag -or $tag -eq 'latest') {
     # The latest release redirects to .../releases/tag/<tag>; no API call needed.
     $resp = Invoke-WebRequest -Uri "$base/latest" -UseBasicParsing -MaximumRedirection 5
     $final = $resp.BaseResponse.ResponseUri

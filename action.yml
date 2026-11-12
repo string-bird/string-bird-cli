@@ -22,7 +22,7 @@ runs:
     - id: install
       shell: bash
       env:
-        SB_VERSION: ${{ inputs.version == 'latest' && '' || inputs.version }}
+        SB_VERSION: ${{ inputs.version }}
         SB_INSTALL_DIR: ${{ runner.temp }}/sb-cli
       run: |
         sh "$GITHUB_ACTION_PATH/install.sh"

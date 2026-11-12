@@ -4,7 +4,7 @@
 #   curl -fsSL https://raw.githubusercontent.com/string-bird/string-bird-cli/main/install.sh | sh
 #
 # Environment:
-#   SB_VERSION      release tag to install (default: the latest release), e.g. v0.1.0
+#   SB_VERSION      release tag to install, e.g. v0.1.0 (default or "latest": the latest release)
 #   SB_INSTALL_DIR  where to put sb (default: /usr/local/bin if writable, else ~/.local/bin)
 #   SB_DOWNLOAD_BASE  releases URL (default: https://github.com/string-bird/string-bird-cli/releases)
 #
@@ -41,7 +41,7 @@ aarch64 | arm64) arch=arm64 ;;
 esac
 
 tag=${SB_VERSION:-}
-if [ -z "$tag" ]; then
+if [ -z "$tag" ] || [ "$tag" = latest ]; then
 	# The latest release redirects to …/releases/tag/<tag>; no API call needed.
 	latest=$(curl -fsSLI -o /dev/null -w '%{url_effective}' "$base/latest") ||
 		fail "couldn't find the latest release at $base/latest"

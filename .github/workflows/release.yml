@@ -16,17 +16,17 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Check out
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0 # changelog
       - name: Set up Go
-        uses: actions/setup-go@v6
+        uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
       - name: Run tests
         run: go test ./...
       - name: Build and publish the release
-        uses: goreleaser/goreleaser-action@v6
+        uses: goreleaser/goreleaser-action@v7
         with:
           distribution: goreleaser
           version: "~> v2"
@@ -38,7 +38,7 @@ jobs:
       # `gh attestation verify sb_*.tar.gz --repo string-bird/string-bird-cli`
       # proves an archive was built here from the tagged commit.
       - name: Attest build provenance
-        uses: actions/attest-build-provenance@v2
+        uses: actions/attest-build-provenance@v4
         with:
           subject-checksums: dist/checksums.txt
       # `uses: string-bird/string-bird-cli@v0` follows the latest v0.x.y release.

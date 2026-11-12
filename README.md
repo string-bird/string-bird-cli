@@ -81,7 +81,7 @@ Prebuilt binaries for Linux, macOS and Windows (x64 and ARM64) are attached to e
 | Windows (PowerShell) | `irm https://raw.githubusercontent.com/string-bird/string-bird-cli/main/install.ps1 \| iex` |
 | Homebrew | `brew install string-bird/tap/sb` |
 | Scoop | `scoop bucket add stringbird https://github.com/string-bird/scoop-bucket` then `scoop install stringbird/sb` |
-| Go 1.26+ | `go install github.com/string-bird/string-bird-cli/cmd/sb@latest` |
+| Go 1.27+ | `go install github.com/string-bird/string-bird-cli/cmd/sb@latest` |
 
 The install scripts verify the download against the release's `checksums.txt` and accept
 two optional variables:
@@ -508,7 +508,7 @@ sb: get project: invalid_api_key: the API key is invalid, revoked or expired (HT
 
 ## Development
 
-Requires Go 1.26 or newer.
+Requires Go 1.27 or newer.
 
 ```bash
 go test ./...
